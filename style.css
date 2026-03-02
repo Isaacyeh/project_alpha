@@ -42,3 +42,82 @@ canvas {
   width: 25%;
   padding: 4px;
 }
+
+/* menu styling */
+.menu {
+  position: absolute;
+  top: 80px;
+  background-image: linear-gradient(to right, black, lightslategray);
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+
+.menu ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu li {
+  margin: 10px 0;
+}
+
+.menu a {
+  text-decoration: none;
+  color: white;
+  font-weight: bold;
+  font-size:28px;
+}
+
+.hidden {
+  display: none;
+}
+
+.menu li a:hover {
+  text-decoration: line-through;
+}
+
+.menu li a:hover::before {
+  content: "<> "
+}
+
+.menu li a:hover::after {
+  content: " <>";
+}
+
+
+.bars{
+  height:5px;
+  width:40px;
+  background:black;
+  transition:2s;
+}
+#menu-button{
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 20px);
+  grid-template-rows: repeat(4, 4px);
+  gap: 10px 10px;
+  margin:20px;
+}
+  
+body {
+  margin: 0;
+  font-family: arial;
+}
+
+.title {
+  background-color: lightslategray;
+  padding: 5px;
+  margin: 0;
+  font-family: Verdana;
+  font-weight: bold;
+}
+
+.title h1 {
+  text-align: center;
+  font-size: 45px;
+  margin: 10px 0;
+}
