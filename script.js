@@ -1,166 +1,35 @@
+import { initPlayer, update, getState, setMyId, setOthers } from "./script_files/player.js";
+import { setupChat } from "./script_files/chat.js";
+import { render } from "./script_files/render/render.js";
+
+const keys = {};
+window.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+});
+window.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// ====================
-// PLAYER CONSTANTS
-// ====================
-const PLAYER_RADIUS = 0.2;
-const MOVE_SPEED = 0.05;
-const FOV = Math.PI / 3;
-const RAYS = canvas.width;
-const JUMP_VELOCITY = 0.22;
-const GRAVITY = 0.012;
-const MAX_JUMP = 0.35;
-const JUMP_SCALE = 200;
-const MINIMAP_SCALE = 10;
-const MINIMAP_PADDING = 10;
-
-// ====================
-// MAP
-// ====================
-const maps = [
-  [
-    "------------------------------####-----------------------------------",
-    "---------------##############-#--#-----------------------------------",
-    "---------------#------------###-##-----------------------------------",
-    "---------------#-----------------#-----------------------------------",
-    "---------------#-#----------###--#-----------------------------------",
-    "---------------#-#----------#-#--#-----------------------------------",
-    "--------########-#######----#-#--#-----------------------------------",
-    "--------#--------#-----##-###-#--####################----------------",
-    "--------#--#####-#-#####---#-##--#------------------#----------------",
-    "--------#--#---#-###---#---#-#----------------------#----------------",
-    "--------#--#---#-----------#-#####------------------#-#####----------",
-    "--------#--#---###-----#---###---#############---######---#----------",
-    "-------##--#######-#####---------#-----------#------------#----------",
-    "-------#-----------#---#---###---#-----------#-----####---##---------",
-    "#########--#########---#####-#--##-----------#-----#--#----#---------",
-    "#------------####-####---#####--#------------#-----#--#----#---------",
-    "#------------#--#-#--#---#------##############-----#--#----#---------",
-    "#---------------###--#####-------------------------#--#----#---------",
-    "#------------#---#---------------------------------#--#----#---------",
-    "##########---#---------------------------##############----#---------",
-    "---------#---######----------------------#----------#-----##---------",
-    "---------#---#---###-######--------------#----------#-----#----------",
-    "---------#---#---#----##--#--------------#----------#-----#########--",
-    "---------#---#---#-----#--#############-##----------##------------##-",
-    "---------#--##---#-----#------------#----#-----------#-------------##",
-    "---------#--##--###-####------------#----#-----------#--------------#",
-    "---------#---#--#-----#########-----##--##-----------#-------########",
-    "---------#---####--------#----#------#-###############-------#-------",
-    "---------#--------------------#-----##-----------------------#-------",
-    "---------#---#-----------#----#-----#-----------##############-------",
-    "---------#####--#-----#--#---##-----#-----------#--------------------",
-    "-------------#--#-----#--#---#------#-----------#--------------------",
-    "-------------#--#######--#---########-----------#--------------------",
-    "-------------#-----------#----------#---####----#--------------------",
-    "-------------##----------#--------------####----#--------------------",
-    "-------------#-----##----########################--------------------",
-    "-------------#----#------#-------------------------------------------",
-    "-------------#-----------#-------------------------------------------",
-    "-------------###-#####-###-------------------------------------------",
-    "--------------#---------#--------------------------------------------",
-    "--------------#---------#--------------------------------------------",
-    "--------------###########--------------------------------------------",
-  ],
-];
-
-let mapIndex = 0;
-let map = maps[mapIndex];
-const mapStr = "#";
-
-function isWall(x, y) {
-  return map[Math.floor(y)]?.[Math.floor(x)] === mapStr;
-}
-
-// ====================
-// PLAYER STATE
-// ====================
-let player = { x: 3, y: 17, angle: 0 };
-let z = 0;
-let zVel = 0;
-let onGround = true;
-
-let others = {};
-let myId = null;
-
-// ====================
-// INPUT
-// ====================
-const keys = {};
-onkeydown = (e) => (keys[e.key] = true);
-onkeyup = (e) => (keys[e.key] = false);
-
-// ====================
-// CHAT STATE
-// ====================
-let isChatting = false;
-
-// ====================
-// CHAT ELEMENTS
-// ====================
+// chat elements
 const chat = document.getElementById("chat");
 const chatInput = document.getElementById("chatInput");
 const sendBtn = document.getElementById("sendBtn");
-
 // WebSocket
 const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
 const ws = new WebSocket(wsProtocol + location.host);
 
-// Prompt username
-let username = prompt("Enter your username:") || "Anonymous";
-username = username.trim() || "Anonymous";
+const { username } = getState();
+setupChat(ws, chatInput, chat, sendBtn, username);
+initPlayer(keys, ws);
 
-ws.addEventListener("open", () => {
-  ws.send(JSON.stringify({ type: "setName", name: username }));
-});
-
-// ====================
-// CHAT LOGIC
-// ====================
-function sendMessage() {
-  const msg = chatInput.value.trim();
-  if (!msg) return;
-  ws.send(JSON.stringify({ type: "chat", message: msg }));
-  chatInput.value = "";
-  chatInput.blur();
-}
-
-sendBtn.addEventListener("click", sendMessage);
-
-chatInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendMessage();
-});
-
-chatInput.addEventListener("focus", () => {
-  isChatting = true;
-});
-
-chatInput.addEventListener("blur", () => {
-  isChatting = false;
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "/") {
-    chatInput.focus();
-  }
-});
-
-// ====================
 // NETWORK EVENTS
-// ====================
 ws.addEventListener("message", (e) => {
   const data = JSON.parse(e.data);
-
-  if (data.type === "init") myId = data.id;
-  if (data.type === "players") others = { ...data.players };
-
-  if (data.type === "chat") {
-    const div = document.createElement("div");
-    div.textContent = `${data.name}: ${data.message}`;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-  }
+  if (data.type === "init") setMyId(data.id);
+  if (data.type === "players") setOthers(data.players);
 });
 
 // ====================
@@ -410,9 +279,11 @@ function render() {
   drawMinimap();
   requestAnimationFrame(loop);
 }
+
 function loop() {
   update();
-  render();
+  render(canvas, ctx);
+  requestAnimationFrame(loop);
 }
 
 loop();

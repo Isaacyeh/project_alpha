@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(__dirname));
 
-const players = {}; // id => { x, y, angle, z, username }
+const players = {}; // id => { x, y, angle, z, username. projectiles, health }
 
 function broadcastPlayers() {
   const data = JSON.stringify({ type: "players", players });
@@ -31,7 +31,15 @@ wss.on("connection", (ws) => {
   const id = Math.random().toString(36).slice(2);
   ws.id = id;
   ws.username = "Anonymous";
-  players[id] = { x: 3, y: 17, angle: 0, z: 0, username: ws.username };
+  players[id] = {
+    x: 3,
+    y: 17,
+    angle: 0,
+    z: 0,
+    username: ws.username,
+    projectiles: [],
+    health: 1,
+  };
 
   ws.send(JSON.stringify({ type: "init", id }));
 
