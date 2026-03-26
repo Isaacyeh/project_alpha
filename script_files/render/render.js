@@ -1,7 +1,7 @@
 import { FOV, JUMP_SCALE, MAX_HEALTH } from "../constant.js";
 import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
-import { getState } from "../player.js";
+import { getState, respawn } from "../player.js";
 
 function drawSphere(ctx, x, y, radius, color = "#4db8ff") {
   ctx.beginPath();
@@ -31,8 +31,40 @@ function drawHealthBar(ctx, x, y, width, height, healthRatio) {
   );
 }
 
+// Set up respawn button click once
+let respawnListenerAdded = false;
+function setupRespawnButton(canvas) {
+  if (respawnListenerAdded) return;
+  respawnListenerAdded = true;
+  canvas.addEventListener("click", (e) => {
+    const state = getState();
+    if (!state.isDead || !state.canRespawn) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    // Button is centered, 200x50, at vertical center + 110
+    const bx = canvas.width / 2 - 100;
+    const by = canvas.height / 2 + 85;
+    if (mx >= bx && mx <= bx + 200 && my >= by && my <= by + 50) {
+      respawn();
+    }
+  });
+}
+
 export function render(canvas, ctx) {
-  const { player, z, others, myId, projectiles, health } = getState();
+  setupRespawnButton(canvas);
+
+  const {
+    player,
+    z,
+    others,
+    myId,
+    projectiles,
+    health,
+    isDead,
+    deathTimer,
+    canRespawn,
+  } = getState();
   const rays = canvas.width;
   const jumpOffset = z * JUMP_SCALE;
   const horizon = canvas.height / 2 + jumpOffset;
@@ -87,13 +119,11 @@ export function render(canvas, ctx) {
     allProjectiles.push(...remoteProjectiles);
   }
 
-  // Collect all sprites and depth-sort them back-to-front
+  // Collect all sprites and depth-sort back-to-front
   const sprites = [];
-
   for (const projectile of allProjectiles) {
     sprites.push({ type: "projectile", data: projectile });
   }
-
   for (const id in others) {
     if (id === myId) continue;
     sprites.push({ type: "player", id, data: others[id] });
@@ -102,7 +132,7 @@ export function render(canvas, ctx) {
   sprites.sort((a, b) => {
     const distA = Math.hypot(a.data.x - player.x, a.data.y - player.y);
     const distB = Math.hypot(b.data.x - player.x, b.data.y - player.y);
-    return distB - distA; // farthest first so closer sprites draw on top
+    return distB - distA;
   });
 
   for (const sprite of sprites) {
@@ -141,7 +171,6 @@ export function render(canvas, ctx) {
       ctx.fillStyle = "red";
       ctx.fillRect(bodyX, sy, bodyWidth, size);
 
-      // Nametag
       const name = p.username || "Anonymous";
       const fontSize = Math.max(10, Math.min(18, size / 6));
       ctx.font = `${fontSize}px Arial`;
@@ -156,7 +185,6 @@ export function render(canvas, ctx) {
       ctx.fillStyle = "#fff";
       ctx.fillText(name, sx, labelY - 2);
 
-      // Health bar
       const remoteHealth = Number.isFinite(p.health) ? p.health : MAX_HEALTH;
       const barWidth = bodyWidth;
       const barHeight = Math.max(6, size * 0.07);
@@ -181,4 +209,59 @@ export function render(canvas, ctx) {
   const hudX = 24;
   const hudY = canvas.height - hudHeight - 20;
   drawHealthBar(ctx, hudX, hudY, hudWidth, hudHeight, health / MAX_HEALTH);
+
+  // Death screen overlay
+  if (isDead) {
+    ctx.fillStyle = "rgba(180, 0, 0, 0.55)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // YOU DIED
+    ctx.font = "bold 96px Arial";
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillText("YOU DIED", canvas.width / 2 + 4, canvas.height / 2 - 36);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("YOU DIED", canvas.width / 2, canvas.height / 2 - 40);
+
+    if (!canRespawn) {
+      // Countdown until button appears
+      const secondsLeft = Math.ceil((300 - deathTimer) / 60);
+      ctx.font = "bold 28px Arial";
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      ctx.fillText(
+        `Respawn available in ${secondsLeft}...`,
+        canvas.width / 2 + 2,
+        canvas.height / 2 + 42
+      );
+      ctx.fillStyle = "#ffcccc";
+      ctx.fillText(
+        `Respawn available in ${secondsLeft}...`,
+        canvas.width / 2,
+        canvas.height / 2 + 40
+      );
+    } else {
+      // Respawn button
+      const bx = canvas.width / 2 - 100;
+      const by = canvas.height / 2 + 85;
+      const bw = 200;
+      const bh = 50;
+
+      // Button shadow
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(bx + 3, by + 3, bw, bh);
+      // Button background
+      ctx.fillStyle = "#cc0000";
+      ctx.fillRect(bx, by, bw, bh);
+      // Button border
+      ctx.strokeStyle = "#ff6666";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bx, by, bw, bh);
+      // Button text
+      ctx.font = "bold 22px Arial";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("RESPAWN", canvas.width / 2, by + bh / 2);
+    }
+  }
 }
