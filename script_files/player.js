@@ -71,6 +71,7 @@ export function setOthers(nextOthers) {
   if (state.myId && nextOthers[state.myId] !== undefined) {
     const serverHealth = nextOthers[state.myId].health;
     if (!state.isDead && !state.isRespawning && serverHealth <= 0) {
+      state.health = 0;
       state.isDead = true;
       state.deathTimer = 0;
       state.canRespawn = false;
