@@ -2,7 +2,7 @@
 export const PLAYER_RADIUS = 0.2;
 export const MOVE_SPEED = 0.05;
 export const FOV = Math.PI / 3;
-export const JUMP_VELOCITY = 0.22;
+export const JUMP_VELOCITY = 0.15;
 export const GRAVITY = 0.012;
 export const MAX_JUMP = 0.35;
 export const JUMP_SCALE = 200;

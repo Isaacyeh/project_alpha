@@ -13,7 +13,7 @@ import {
 } from "./constant.js";
 import { isWall } from "./map.js";
 
-const SPAWN = { x: 3, y: 17, angle: 0 };
+const SPAWN = { x: 3, y: 17, angle: 0, sneaking: false };
 
 const state = {
   player: { ...SPAWN },
@@ -37,9 +37,11 @@ const state = {
 
 let keysRef = null;
 let wsRef = null;
+let mouseRef = null;
 let wasQPressed = false;
 let wasMousePressed = false;
 let nextProjectileId = 1;
+let COOLDOWN = 10; // frames between shots
 const processedHits = new Set();
 
 function debugLog(msg) {
@@ -58,9 +60,10 @@ let debugTick = 0;
 let closestEver = Infinity;
 let hasEverSentProjectile = false;
 
-export function initPlayer(keys, ws) {
+export function initPlayer(keys, ws, mouse) {
   keysRef = keys;
   wsRef = ws;
+  mouseRef = mouse;
 }
 
 export function setIsChatting(value) {
@@ -102,6 +105,7 @@ export function respawn() {
   state.player.x = SPAWN.x;
   state.player.y = SPAWN.y;
   state.player.angle = SPAWN.angle;
+  state.player.sneaking = SPAWN.sneaking;
   state.z = 0;
   state.zVel = 0;
   state.onGround = true;
@@ -129,7 +133,7 @@ function canMove(x, y) {
 }
 
 export function update() {
-  if (!keysRef || !wsRef) return;
+  if (!keysRef || !wsRef || !mouseRef) return;
 
   if (state.isDead) {
     state.deathTimer++;
@@ -146,9 +150,9 @@ export function update() {
           angle: state.player.angle,
           z: state.z,
           projectiles: [],
-          health: state.health,
-        })
+          health: state.health,          sneaking: state.player.sneaking,        })
       );
+      }
     }
     return;
   }
@@ -156,26 +160,34 @@ export function update() {
   const { player } = state;
 
   if (!state.isChatting && keysRef.ArrowLeft) player.angle -= 0.04;
-  if (!state.isChatting && keysRef.ArrowRight) player.angle += 0.04;
+  if (!state.isChatting && keysRef.ArrowRigh) player.angle += 0.04;
 
   let moveX = 0;
   let moveY = 0;
 
+  let sneakSpeed = 1;
+  if (!state.isChatting && keysRef.Shift) {
+    sneakSpeed = 0.5;
+  }
+
+  // Update sneaking state
+  state.player.sneaking = !state.isChatting && keysRef.Shift;
+
   if (!state.isChatting && keysRef.w) {
-    moveX += Math.cos(player.angle) * MOVE_SPEED;
-    moveY += Math.sin(player.angle) * MOVE_SPEED;
+    moveX += Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
+    moveY += Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
   }
   if (!state.isChatting && keysRef.s) {
-    moveX -= Math.cos(player.angle) * MOVE_SPEED;
-    moveY -= Math.sin(player.angle) * MOVE_SPEED;
+    moveX -= Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
+    moveY -= Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
   }
   if (!state.isChatting && keysRef.a) {
-    moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED;
-    moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED;
+    moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
+    moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
   }
   if (!state.isChatting && keysRef.d) {
-    moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED;
-    moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED;
+    moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
+    moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
   }
 
   const nx = player.x + moveX;
@@ -205,9 +217,18 @@ export function update() {
   }
 
   const qPressed = !state.isChatting && Boolean(keysRef.q);
-  const mousePressed = !state.isChatting && Boolean(keysRef.mouse);
+  const mousePressed = !state.isChatting && Boolean(mouseRef.buttons[0]);
   const shouldShoot = (qPressed && !wasQPressed) || (mousePressed && !wasMousePressed);
+  
+  const mouseMoveX = mouseRef.dx || 0;
+  const MOUSE_SENSITIVITY = 0.006; // tune
 
+  if (!state.isChatting && mouseMoveX !== 0) {
+  player.angle += mouseMoveX * MOUSE_SENSITIVITY;
+  }
+
+  mouseRef.dx = 0;
+  mouseRef.dy = 0;
   if (shouldShoot) {
     const pid = nextProjectileId++;
     state.projectiles.push({
@@ -233,9 +254,10 @@ export function update() {
 
   if (wasQPressed || wasMousePressed) {
     state.cooldown++;
-    if (state.cooldown >= 15) {
+    if (state.cooldown >= COOLDOWN) {
       state.cooldown = 0;
-      state.hasShot = false;
+      wasQPressed = false;
+      wasMousePressed = false;
     }
   }
 
@@ -257,6 +279,7 @@ export function update() {
       z: state.z,
       projectiles: state.projectiles,
       health: state.health,
+      sneaking: state.player.sneaking,
     };
 
     if (state.projectiles.length > 0 && !hasEverSentProjectile) {
