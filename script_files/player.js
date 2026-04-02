@@ -37,7 +37,8 @@ const state = {
 
 let keysRef = null;
 let wsRef = null;
-//let wasQPressed = false;
+let wasQPressed = false;
+let wasMousePressed = false;
 let nextProjectileId = 1;
 const processedHits = new Set();
 
@@ -203,8 +204,11 @@ export function update() {
     state.onGround = true;
   }
 
-  const qPressed = !state.isChatting && Boolean(keysRef.q || keysRef.Q);
-  if (qPressed && !hasShot) {
+  const qPressed = !state.isChatting && Boolean(keysRef.q);
+  const mousePressed = !state.isChatting && Boolean(keysRef.mouse);
+  const shouldShoot = (qPressed && !wasQPressed) || (mousePressed && !wasMousePressed);
+
+  if (shouldShoot) {
     const pid = nextProjectileId++;
     state.projectiles.push({
       id: pid,
@@ -223,9 +227,11 @@ export function update() {
       ).toFixed(2)}`
     );
   }
-  state.hasShot = qPressed
 
-  if (state.hasShot) {
+  wasQPressed = qPressed;
+  wasMousePressed = mousePressed;
+
+  if (wasQPressed || wasMousePressed) {
     state.cooldown++;
     if (state.cooldown >= 15) {
       state.cooldown = 0;
