@@ -27,6 +27,8 @@ const state = {
   health: MAX_HEALTH,
   isDead: false,
   deathTimer: 0,
+  hasShot: true,
+  cooldown: 0,
   canRespawn: false,
   isRespawning: false, // ADD THIS
   username:
@@ -35,7 +37,7 @@ const state = {
 
 let keysRef = null;
 let wsRef = null;
-let wasQPressed = false;
+//let wasQPressed = false;
 let nextProjectileId = 1;
 const processedHits = new Set();
 
@@ -103,6 +105,8 @@ export function respawn() {
   state.zVel = 0;
   state.onGround = true;
   state.health = MAX_HEALTH;
+  state.hasShot = false;
+  state.cooldown = 0;
   state.projectiles = [];
   if (wsRef && wsRef.readyState === WebSocket.OPEN) {
     wsRef.send(JSON.stringify({ type: "respawn" }));
@@ -200,7 +204,7 @@ export function update() {
   }
 
   const qPressed = !state.isChatting && Boolean(keysRef.q || keysRef.Q);
-  if (qPressed && !wasQPressed) {
+  if (qPressed && !hasShot) {
     const pid = nextProjectileId++;
     state.projectiles.push({
       id: pid,
@@ -219,7 +223,15 @@ export function update() {
       ).toFixed(2)}`
     );
   }
-  wasQPressed = qPressed;
+  state.hasShot = qPressed
+
+  if (state.hasShot) {
+    state.cooldown++;
+    if (state.cooldown >= 15) {
+      state.cooldown = 0;
+      state.hasShot = false;
+    }
+  }
 
   state.projectiles = state.projectiles.filter((projectile) => {
     const nextX = projectile.x + projectile.vx;
