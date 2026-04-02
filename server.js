@@ -62,13 +62,14 @@ function checkProjectileHits() {
     */
     
     for (const projectile of projectiles) {
+      /*
       if (projectile.id == null) {
         if (shouldLogMiss) {
           broadcastDebug(`WARNING: projectile from ${shooter.username} has no ID — hit detection skipped!`);
         }
         continue;
       }
-
+`     */
       for (const victimId in players) {
         if (victimId === shooterId) continue;
         const victim = players[victimId];
@@ -100,21 +101,23 @@ function checkProjectileHits() {
 
         if (distance <= PROJECTILE_HIT_RADIUS && zDistance <= 0.5) {
           victim.health = Math.max(0, Number((victim.health - HIT_DAMAGE).toFixed(3)));
+          /* hit debug
           processedHits.add(hitKey);
           const msg = `HIT! ${shooter.username} → ${victim.username} | dist=${distance.toFixed(3)} | health now ${victim.health}`;
           console.log(msg);
           broadcastDebug(msg);
+          */
         }
       }
     }
   }
-
+  /* shooting debug
   if (shouldLogMiss && closestMiss) {
     broadcastDebug(
       `Closest miss: ${closestMiss.shooter}→${closestMiss.victim} dist=${closestMiss.distance} zdist=${closestMiss.zDistance} | proj=(${closestMiss.px},${closestMiss.py}) victim=(${closestMiss.vx},${closestMiss.vy})`
     );
   }
-
+  */
   const activeKeys = new Set();
   for (const shooterId in players) {
     for (const p of players[shooterId].projectiles || []) {
@@ -188,7 +191,7 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    broadcastDebug(`${ws.username} disconnected`);
+    //broadcastDebug(`${ws.username} disconnected`); disconnect debug
     delete players[id];
     broadcastPlayers();
   });
