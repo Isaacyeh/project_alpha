@@ -166,13 +166,10 @@ export function update() {
   let moveX = 0;
   let moveY = 0;
 
-  let sneakSpeed = 1;
-  if (!state.isChatting && keysRef.Shift) {
-    sneakSpeed = 0.5;
-  }
-
   // Update sneaking state
   state.player.sneaking = !state.isChatting && keysRef.Shift;
+
+  let sneakSpeed = state.player.sneaking ? 0.5 : 1;
 
   if (!state.isChatting && keysRef.w) {
     moveX += Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
@@ -225,7 +222,7 @@ export function update() {
   const MOUSE_SENSITIVITY = 0.006; // tune
 
   if (!state.isChatting && mouseMoveX !== 0) {
-  player.angle += mouseMoveX * MOUSE_SENSITIVITY;
+    player.angle += mouseMoveX * MOUSE_SENSITIVITY;
   }
 
   mouseRef.dx = 0;
