@@ -7,10 +7,7 @@ const keys = {};
 const mouse = { x: 0, y: 0, dx: 0, dy: 0, buttons: {}};
 
 window.addEventListener("mousemove", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-
+  if (document.pointerLockElement === canvas) return; // locked, handled separately
   const newX = e.clientX;
   const newY = e.clientY;
   mouse.dx = newX - (mouse.x || newX);
@@ -18,6 +15,7 @@ window.addEventListener("mousemove", (e) => {
   mouse.x = newX;
   mouse.y = newY;
 });
+
 window.addEventListener("keydown", (e) => {
   keys[e.key] = true;
 });
@@ -34,10 +32,29 @@ window.addEventListener("mouseup", (e) => {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+// Pointer lock setup
+canvas.addEventListener("click", () => {
+  canvas.requestPointerLock();
+});
+
+document.addEventListener("pointerlockchange", () => {
+  if (document.pointerLockElement === canvas) {
+    window.addEventListener("mousemove", onLockedMouseMove);
+  } else {
+    window.removeEventListener("mousemove", onLockedMouseMove);
+  }
+});
+
+function onLockedMouseMove(e) {
+  mouse.dx = e.movementX;
+  mouse.dy = e.movementY;
+}
+
 // chat elements
 const chat = document.getElementById("chat");
 const chatInput = document.getElementById("chatInput");
 const sendBtn = document.getElementById("sendBtn");
+
 // WebSocket
 const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
 const ws = new WebSocket(wsProtocol + location.host);
