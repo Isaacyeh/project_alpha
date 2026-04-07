@@ -1,4 +1,4 @@
-import { FOV, JUMP_SCALE, MAX_HEALTH, PLAYERIMG} from "../constant.js";
+import { FOV, JUMP_SCALE, MAX_HEALTH} from "../constant.js";
 import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
 import { getState, respawn } from "../player.js";
@@ -168,13 +168,8 @@ export function render(canvas, ctx) {
       const bodyWidth = size / 2;
       const bodyX = sx - bodyWidth / 2;
 
-      if (playerImage.complete && playerImage.naturalWidth > 0) {
-        ctx.drawImage(playerImage, bodyX, sy, bodyWidth, size);
-      } else {
-        // Fallback while image loads
-        ctx.fillStyle = "red";
-        ctx.fillRect(bodyX, sy, bodyWidth, size);
-      }
+      ctx.fillStyle = "red";
+      ctx.fillRect(bodyX, sy, bodyWidth, size);
 
       const name = p.username || "Anonymous";
       const fontSize = Math.max(10, Math.min(18, size / 6));
