@@ -101,8 +101,8 @@ function checkProjectileHits() {
 
         if (distance <= PROJECTILE_HIT_RADIUS && zDistance <= 0.5) {
           victim.health = Math.max(0, Number((victim.health - HIT_DAMAGE).toFixed(3)));
-          /* hit debug
           processedHits.add(hitKey);
+          /* hit debug
           const msg = `HIT! ${shooter.username} → ${victim.username} | dist=${distance.toFixed(3)} | health now ${victim.health}`;
           console.log(msg);
           broadcastDebug(msg);
