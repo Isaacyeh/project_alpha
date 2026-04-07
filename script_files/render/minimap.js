@@ -40,6 +40,7 @@ export function drawMinimap(ctx) {
   for (const id in others) {
     if (id === myId) continue;
     const p = others[id];
+    if (p.sneaking) continue;
     const dx = p.x - player.x;
     const dy = p.y - player.y;
     if (Math.abs(dx) > VIEW_RADIUS || Math.abs(dy) > VIEW_RADIUS) continue;
