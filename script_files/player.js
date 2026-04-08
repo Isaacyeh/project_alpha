@@ -10,6 +10,7 @@ import {
   MAX_HEALTH,
   HIT_DAMAGE,
   PROJECTILE_HIT_RADIUS,
+  SPAWN_INVINCIBILITY_DURATION,
 } from "./constant.js";
 import { isWall } from "./map.js";
 
@@ -30,7 +31,8 @@ const state = {
   hasShot: true,
   cooldown: 0,
   canRespawn: false,
-  isRespawning: false, // ADD THIS
+  isRespawning: false,
+  invincibilityTimer: 0, // Track frames of invincibility
   inMenu: false,
   sprite: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzsRyhF1hwCvj9rwrjvQvXLKupdnrDIH8gyw&s", // Default sprite
   username:
@@ -104,9 +106,18 @@ export function setSprite(url) {
 
 export function setMenuOpen(value) {
   state.inMenu = Boolean(value);
-  if (!value) {
-    // When menu closes, reset to full health
+  if (value) {
+    // When menu opens, notify server and grant invincibility
+    if (wsRef && wsRef.readyState === WebSocket.OPEN) {
+      wsRef.send(JSON.stringify({ type: "menuOpen" }));
+    }
+  } else {
+    // When menu closes, reset to full health and notify server
     state.health = MAX_HEALTH;
+    state.invincibilityTimer = 0;
+    if (wsRef && wsRef.readyState === WebSocket.OPEN) {
+      wsRef.send(JSON.stringify({ type: "menuClosed" }));
+    }
   }
 }
 
@@ -120,6 +131,7 @@ export function respawn() {
   state.canRespawn = false;
   state.deathTimer = 0;
   state.isRespawning = true; // ADD: block setOthers from re-killing us
+  state.invincibilityTimer = SPAWN_INVINCIBILITY_DURATION; // 3 seconds of invincibility
   state.player.x = SPAWN.x;
   state.player.y = SPAWN.y;
   state.player.angle = SPAWN.angle;
@@ -156,6 +168,11 @@ export function update() {
   if (state.inMenu) {
     // Block all input while menu is open
     return;
+  }
+
+  // Decrement invincibility timer when not in menu
+  if (state.invincibilityTimer > 0) {
+    state.invincibilityTimer--;
   }
 
   if (state.isDead) {

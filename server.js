@@ -13,6 +13,7 @@ app.use(express.static(__dirname));
 const HIT_DAMAGE = 0.1;
 const PROJECTILE_HIT_RADIUS = 0.6;
 const MAX_HEALTH = 1;
+const SPAWN_INVINCIBILITY_DURATION = 180; // 3 seconds at 60fps
 
 const SPAWN = { x: 3, y: 17, angle: 0 };
 
@@ -23,7 +24,23 @@ let debugTick = 0;
 const DEBUG_INTERVAL = 60;
 
 function broadcastPlayers() {
-  const data = JSON.stringify({ type: "players", players });
+  // Clean player data before broadcasting to remove server-only fields
+  const cleanedPlayers = {};
+  for (const id in players) {
+    const p = players[id];
+    cleanedPlayers[id] = {
+      x: p.x,
+      y: p.y,
+      angle: p.angle,
+      z: p.z,
+      username: p.username,
+      projectiles: p.projectiles || [],
+      health: p.health,
+      sprite: p.sprite,
+      sneaking: p.sneaking,
+    };
+  }
+  const data = JSON.stringify({ type: "players", players: cleanedPlayers });
   wss.clients.forEach((c) => {
     if (c.readyState === WebSocket.OPEN) c.send(data);
   });
@@ -50,6 +67,13 @@ function checkProjectileHits() {
   let closestMiss = null;
   let closestMissDist = Infinity;
 
+  // Decrement invincibility timers for all players
+  for (const playerId in players) {
+    if (players[playerId].invincibilityTimer > 0) {
+      players[playerId].invincibilityTimer--;
+    }
+  }
+
   for (const shooterId in players) {
     const shooter = players[shooterId];
     const projectiles = shooter.projectiles || [];
@@ -74,6 +98,11 @@ function checkProjectileHits() {
 
         // Don't damage already-dead players
         if (victim.health <= 0) continue;
+
+        // Don't damage invincible players
+        if (victim.invincibilityTimer > 0 || victim.inMenu) {
+          continue;
+        }
 
         const hitKey = `${shooterId}:${projectile.id}:${victimId}`;
         if (processedHits.has(hitKey)) continue;
@@ -140,6 +169,8 @@ wss.on("connection", (ws) => {
     projectiles: [],
     health: MAX_HEALTH,
     sprite: "/images/sprite1.png", // Default sprite
+    invincibilityTimer: 0,
+    inMenu: false,
   };
 
   ws.send(JSON.stringify({ type: "init", id }));
@@ -161,12 +192,32 @@ wss.on("connection", (ws) => {
     if (data.type === "respawn") {
       if (players[id]) {
         players[id].health = MAX_HEALTH;
+        players[id].invincibilityTimer = SPAWN_INVINCIBILITY_DURATION; // 3 seconds invincibility
+        players[id].inMenu = false;
         players[id].projectiles = [];
         players[id].x = SPAWN.x;
         players[id].y = SPAWN.y;
         players[id].angle = SPAWN.angle;
         players[id].z = 0;
         broadcastDebug(`${ws.username} respawned`);
+        broadcastPlayers();
+      }
+      return;
+    }
+
+    if (data.type === "menuOpen") {
+      if (players[id]) {
+        players[id].inMenu = true;
+        broadcastDebug(`${ws.username} opened character select menu`);
+      }
+      return;
+    }
+
+    if (data.type === "menuClosed") {
+      if (players[id]) {
+        players[id].health = MAX_HEALTH;
+        players[id].inMenu = false;
+        broadcastDebug(`${ws.username} closed character select menu - health reset to ${MAX_HEALTH}`);
         broadcastPlayers();
       }
       return;
@@ -185,17 +236,12 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    if (data.type === "menuClosed") {
-      if (players[id]) {
-        players[id].health = MAX_HEALTH;
-        broadcastDebug(`${ws.username} exited menu - health reset to ${MAX_HEALTH}`);
-      }
-      return;
-    }
-
     if (players[id]) {
       const serverHealth = players[id].health;
-      players[id] = { ...players[id], ...data, health: serverHealth };
+      const invincibilityTimer = players[id].invincibilityTimer;
+      const inMenu = players[id].inMenu;
+      const projectiles = data.projectiles || players[id].projectiles || [];
+      players[id] = { ...players[id], ...data, health: serverHealth, invincibilityTimer, inMenu, projectiles };
       checkProjectileHits();
       broadcastPlayers();
     }
