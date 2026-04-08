@@ -10,18 +10,22 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(__dirname));
 
+// ── Shared constants (must be kept in sync with script_files/constant.js) ───
 const HIT_DAMAGE = 0.1;
-const PROJECTILE_HIT_RADIUS = 0.6;
+const PLAYER_RADIUS = 0.2; // physical half-width of a player
+const PROJECTILE_RADIUS = 0.05; // visual radius of the ball
+// A hit registers when the ball's edge touches the player's edge:
+// total = PLAYER_RADIUS + PROJECTILE_RADIUS
+const PROJECTILE_HIT_RADIUS = PLAYER_RADIUS + PROJECTILE_RADIUS; // 0.25
+const PROJECTILE_HIT_RADIUS_Z = PLAYER_RADIUS + PROJECTILE_RADIUS; // same idea vertically
 const MAX_HEALTH = 1;
+// ────────────────────────────────────────────────────────────────────────────
 const SPAWN_INVINCIBILITY_DURATION = 180; // 3 seconds at 60fps
 
 const SPAWN = { x: 3, y: 17, angle: 0 };
 
 const players = {};
 const processedHits = new Set();
-
-let debugTick = 0;
-const DEBUG_INTERVAL = 60;
 
 function broadcastPlayers() {
   // Clean player data before broadcasting to remove server-only fields
@@ -53,11 +57,19 @@ function broadcastChat(name, message) {
   });
 }
 
-function broadcastDebug(message) {
-  const data = JSON.stringify({ type: "chat", name: "[DEBUG]", message });
-  wss.clients.forEach((c) => {
-    if (c.readyState === WebSocket.OPEN) c.send(data);
-  });
+/**
+ * Returns the minimum distance between point P and line segment AB.
+ * Swept collision — checks the full path the projectile traveled this
+ * frame, not just its tip, so fast projectiles can't tunnel through targets.
+ */
+function pointToSegmentDist(px, py, ax, ay, bx, by) {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const lenSq = abx * abx + aby * aby;
+  if (lenSq === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * abx + (py - ay) * aby) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * abx), py - (ay + t * aby));
 }
 
 function checkProjectileHits() {
@@ -78,25 +90,10 @@ function checkProjectileHits() {
     const shooter = players[shooterId];
     const projectiles = shooter.projectiles || [];
 
-    if (shouldLogMiss && projectiles.length > 0) {
-      broadcastDebug(
-        `${shooter.username} has ${projectiles.length} projectile(s) in flight. IDs: ${projectiles.map((p) => p.id ?? "NO_ID").join(", ")}`
-      );
-    }
-
     for (const projectile of projectiles) {
-      if (projectile.id == null) {
-        if (shouldLogMiss) {
-          broadcastDebug(`WARNING: projectile from ${shooter.username} has no ID — hit detection skipped!`);
-        }
-        continue;
-      }
-
       for (const victimId in players) {
         if (victimId === shooterId) continue;
         const victim = players[victimId];
-
-        // Don't damage already-dead players
         if (victim.health <= 0) continue;
 
         // Don't damage invincible players
@@ -107,42 +104,35 @@ function checkProjectileHits() {
         const hitKey = `${shooterId}:${projectile.id}:${victimId}`;
         if (processedHits.has(hitKey)) continue;
 
-        const dx = projectile.x - victim.x;
-        const dy = projectile.y - victim.y;
-        const distance = Math.hypot(dx, dy);
+        // Swept XY check
+        const prevX = projectile.x - (projectile.vx || 0);
+        const prevY = projectile.y - (projectile.vy || 0);
+        const xyDist = pointToSegmentDist(
+          victim.x,
+          victim.y,
+          prevX,
+          prevY,
+          projectile.x,
+          projectile.y
+        );
+
         const zDistance = Math.abs((projectile.z || 0) - (victim.z || 0));
 
-        if (distance < closestMissDist) {
-          closestMissDist = distance;
-          closestMiss = {
-            shooter: shooter.username,
-            victim: victim.username,
-            distance: distance.toFixed(3),
-            zDistance: zDistance.toFixed(3),
-            px: projectile.x.toFixed(2),
-            py: projectile.y.toFixed(2),
-            vx: victim.x.toFixed(2),
-            vy: victim.y.toFixed(2),
-          };
-        }
-
-        if (distance <= PROJECTILE_HIT_RADIUS && zDistance <= 0.5) {
-          victim.health = Math.max(0, Number((victim.health - HIT_DAMAGE).toFixed(3)));
+        if (
+          xyDist <= PROJECTILE_HIT_RADIUS &&
+          zDistance <= PROJECTILE_HIT_RADIUS_Z
+        ) {
+          victim.health = Math.max(
+            0,
+            Number((victim.health - HIT_DAMAGE).toFixed(3))
+          );
           processedHits.add(hitKey);
-          const msg = `HIT! ${shooter.username} → ${victim.username} | dist=${distance.toFixed(3)} | health now ${victim.health}`;
-          console.log(msg);
-          broadcastDebug(msg);
         }
       }
     }
   }
 
-  if (shouldLogMiss && closestMiss) {
-    broadcastDebug(
-      `Closest miss: ${closestMiss.shooter}→${closestMiss.victim} dist=${closestMiss.distance} zdist=${closestMiss.zDistance} | proj=(${closestMiss.px},${closestMiss.py}) victim=(${closestMiss.vx},${closestMiss.vy})`
-    );
-  }
-
+  // Clean up hit keys for projectiles that no longer exist
   const activeKeys = new Set();
   for (const shooterId in players) {
     for (const p of players[shooterId].projectiles || []) {
@@ -174,7 +164,6 @@ wss.on("connection", (ws) => {
   };
 
   ws.send(JSON.stringify({ type: "init", id }));
-  broadcastDebug(`${ws.username} connected (id=${id})`);
 
   ws.on("message", (msg) => {
     let data;
@@ -199,7 +188,6 @@ wss.on("connection", (ws) => {
         players[id].y = SPAWN.y;
         players[id].angle = SPAWN.angle;
         players[id].z = 0;
-        broadcastDebug(`${ws.username} respawned`);
         broadcastPlayers();
       }
       return;
@@ -226,7 +214,6 @@ wss.on("connection", (ws) => {
     if (data.type === "setName") {
       ws.username = String(data.name || "Anonymous").trim() || "Anonymous";
       if (players[id]) players[id].username = ws.username;
-      broadcastDebug(`Player set name: ${ws.username}`);
       return;
     }
 
@@ -248,7 +235,6 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
-    broadcastDebug(`${ws.username} disconnected`);
     delete players[id];
     broadcastPlayers();
   });

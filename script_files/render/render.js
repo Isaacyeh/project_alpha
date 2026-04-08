@@ -1,7 +1,8 @@
-import { FOV, JUMP_SCALE, MAX_HEALTH } from "../constant.js";
+import { FOV, JUMP_SCALE, MAX_HEALTH} from "../constant.js";
 import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
 import { getState, respawn } from "../player.js";
+import { getCrosshairOptions } from "../crosshair.js";
 
 const playerImages = new Map(); // id -> { img, url }
 
@@ -51,6 +52,29 @@ function drawHealthBar(ctx, x, y, width, height, healthRatio) {
   ctx.fillRect(x + innerPadding, y + innerPadding, innerWidth * ratio, innerHeight);
 }
 
+function drawCrosshair(canvas, ctx) {
+  const { opacity, image } = getCrosshairOptions();
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2 + canvas.height * 0.04;
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+
+  if (image && image.complete) {
+    const size = 34;
+    ctx.drawImage(image, cx - size / 2, cy - size / 2, size, size);
+  } else {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 34px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("+", cx, cy);
+  }
+
+  ctx.restore();
+}
+
+// Set up respawn button click once
 let respawnListenerAdded = false;
 function setupRespawnButton(canvas) {
   if (respawnListenerAdded) return;
@@ -206,6 +230,7 @@ export function render(canvas, ctx) {
   const hudX = 24;
   const hudY = canvas.height - hudHeight - 20;
   drawHealthBar(ctx, hudX, hudY, hudWidth, hudHeight, health / MAX_HEALTH);
+  drawCrosshair(canvas, ctx);
 
   if (isDead) {
     ctx.fillStyle = "rgba(180, 0, 0, 0.55)";

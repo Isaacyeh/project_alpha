@@ -192,4 +192,55 @@ canvas {
 
 #confirmSprite:hover {
   background-color: #8ca3b0;
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-window {
+  width: min(560px, 90vw);
+  background: rgba(28, 28, 28, 0.9);
+  border: 1px solid #888;
+  border-radius: 10px;
+  color: #fff;
+  padding: 18px 20px;
+  position: relative;
+}
+
+.overlay-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.field-group {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.confirm-button {
+  margin-top: 16px;
+  border: 1px solid #bfbfbf;
+  background: #2e2e2e;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
 }

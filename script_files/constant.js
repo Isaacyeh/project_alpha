@@ -12,10 +12,14 @@ export const MINIMAP_PADDING = 10;
 //projectile constants
 export const PROJECTILE_SPEED = 0.2;
 export const PROJECTILE_LIFETIME = 120;
-export const PROJECTILE_START_Z = 0;
+export const PROJECTILE_START_Z = -0.08;
+export const PROJECTILE_RADIUS = 0.05; // visual radius of the ball
 //health constants
 export const MAX_HEALTH = 1;
 export const HIT_DAMAGE = 0.1;
-export const PROJECTILE_HIT_RADIUS = 0.6;
 //invincibility constants
 export const SPAWN_INVINCIBILITY_DURATION = 180; // 3 seconds at 60fps
+// Hit threshold = PLAYER_RADIUS + PROJECTILE_RADIUS (edge-to-edge contact)
+// Must match the values in server.js
+export const PROJECTILE_HIT_RADIUS = PLAYER_RADIUS + PROJECTILE_RADIUS; // 0.25
+export const PROJECTILE_HIT_RADIUS_Z = PLAYER_RADIUS + PROJECTILE_RADIUS; // 0.25
