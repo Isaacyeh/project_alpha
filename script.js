@@ -21,8 +21,12 @@ window.addEventListener("mousemove", (e) => {
 window.addEventListener("keydown", (e) => {
   keys[e.key] = true;
 });
-window.addEventListener("keyup", (e) => {
+document.addEventListener("keyup", (e) => {
   keys[e.key] = false;
+
+  // 🔥 CRITICAL FIX: clear both cases
+  keys[e.key.toLowerCase()] = false;
+  keys[e.key.toUpperCase()] = false;
 });
 window.addEventListener("mousedown", (e) => {
   mouse.buttons[e.button] = true;
