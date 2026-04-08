@@ -192,6 +192,7 @@ canvas {
 
 #confirmSprite:hover {
   background-color: #8ca3b0;
+}
 .overlay {
   position: fixed;
   inset: 0;
