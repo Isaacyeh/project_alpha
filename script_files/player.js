@@ -21,6 +21,7 @@ const state = {
   zVel: 0,
   onGround: true,
   isChatting: false,
+  isMenuOpen: false,
   others: {},
   myId: null,
   projectiles: [],
@@ -68,6 +69,10 @@ export function initPlayer(keys, ws, mouse) {
 
 export function setIsChatting(value) {
   state.isChatting = value;
+}
+
+export function setMenuOpen(value) {
+  state.isMenuOpen = value;
 }
 
 export function setMyId(id) {
@@ -160,29 +165,31 @@ export function update() {
 
   const { player } = state;
 
-  if (!state.isChatting && keysRef.ArrowLeft) player.angle -= 0.04;
-  if (!state.isChatting && keysRef.ArrowRight) player.angle += 0.04;
+  const blockControls = state.isChatting || state.isMenuOpen;
+
+  if (!blockControls && keysRef.ArrowLeft) player.angle -= 0.04;
+  if (!blockControls && keysRef.ArrowRight) player.angle += 0.04;
 
   let moveX = 0;
   let moveY = 0;
 
   // Update sneaking state
-  state.player.sneaking = !state.isChatting && keysRef.Shift;
+  state.player.sneaking = !blockControls && keysRef.Shift;
   let sneakSpeed = state.player.sneaking ? 0.4 : 1;
 
-  if (!state.isChatting && (keysRef.w || keysRef.W)) {
+  if (!blockControls && (keysRef.w || keysRef.W)) {
     moveX += Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
     moveY += Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
   }
-  if (!state.isChatting && (keysRef.s || keysRef.S)) {
+  if (!blockControls && (keysRef.s || keysRef.S)) {
     moveX -= Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
     moveY -= Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
   }
-  if (!state.isChatting && (keysRef.a || keysRef.A)) {
+  if (!blockControls && (keysRef.a || keysRef.A)) {
     moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
     moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
   }
-  if (!state.isChatting && (keysRef.d || keysRef.D)) {
+  if (!blockControls && (keysRef.d || keysRef.D)) {
     moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
     moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
   }
@@ -198,7 +205,7 @@ export function update() {
     if (canMove(player.x, ny)) player.y = ny;
   }
 
-  if (!state.isChatting && keysRef[" "] && state.onGround) {
+  if (!blockControls && keysRef[" "] && state.onGround) {
     state.zVel = JUMP_VELOCITY;
     state.onGround = false;
   }
@@ -213,14 +220,14 @@ export function update() {
     state.onGround = true;
   }
 
-  const qPressed = !state.isChatting && Boolean(keysRef.q);
-  const mousePressed = !state.isChatting && Boolean(mouseRef.buttons[0]);
+  const qPressed = !blockControls && Boolean(keysRef.q);
+  const mousePressed = !blockControls && Boolean(mouseRef.buttons[0]);
   const shouldShoot = (qPressed && !wasQPressed) || (mousePressed && !wasMousePressed);
   
   const mouseMoveX = mouseRef.dx || 0;
   const MOUSE_SENSITIVITY = 0.006; // tune
 
-  if (!state.isChatting && mouseMoveX !== 0) {
+  if (!blockControls && mouseMoveX !== 0) {
     player.angle += mouseMoveX * MOUSE_SENSITIVITY;
   }
 
