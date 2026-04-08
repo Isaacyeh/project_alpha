@@ -34,7 +34,7 @@ const state = {
   isRespawning: false,
   invincibilityTimer: 0, // Track frames of invincibility
   inMenu: false,
-  sprite: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzsRyhF1hwCvj9rwrjvQvXLKupdnrDIH8gyw&s", // Default sprite
+  sprite: "https://t4.ftcdn.net/jpg/02/35/75/31/360_F_235753132_ZvqBgf2hHKbZCYps4VwtT8gnLtWQXSwx.jpg", // Default sprite
   username:
     (prompt("Enter your username:") || "Anonymous").trim() || "Anonymous",
 };
