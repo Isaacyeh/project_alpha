@@ -3,8 +3,33 @@ import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
 import { getState, respawn } from "../player.js";
 
-const playerImage = new Image();
-playerImage.src = "https://news.artnet.com/app/news-upload/2019/07/0168628-scaled.jpg";
+const playerImages = new Map(); // id -> { img, url }
+
+function getPlayerImage(id, spriteUrl) {
+  if (!spriteUrl) return null;
+
+  const existing = playerImages.get(id);
+  if (existing && existing.url === spriteUrl) {
+    return existing.img;
+  }
+
+  const img = new Image();
+  img.__loaded = false;
+  img.__error = false;
+  img.onload = () => {
+    img.__loaded = true;
+    img.__error = false;
+  };
+  img.onerror = () => {
+    img.__loaded = true;
+    img.__error = true;
+    console.warn(`Sprite image failed to load for player ${id}:`, spriteUrl);
+  };
+  img.src = spriteUrl;
+
+  playerImages.set(id, { img, url: spriteUrl });
+  return img;
+}
 
 function drawSphere(ctx, x, y, radius, color = "#4db8ff") {
   ctx.beginPath();
@@ -135,12 +160,20 @@ export function render(canvas, ctx) {
       const bodyWidth = size / 2;
       const bodyX = sx - bodyWidth / 2;
 
-      if (playerImage.complete) {
-        const aspect = playerImage.width / playerImage.height;
+      const playerImg = getPlayerImage(sprite.id, p.sprite);
+
+      if (
+        playerImg &&
+        playerImg.complete &&
+        !playerImg.__error &&
+        playerImg.naturalWidth > 0 &&
+        playerImg.naturalHeight > 0
+      ) {
+        const aspect = playerImg.width / playerImg.height;
         const width = bodyWidth * aspect;
-        ctx.drawImage(playerImage, sx - width / 2, sy, width, size);
+        ctx.drawImage(playerImg, sx - width / 2, sy, width, size);
       } else {
-        ctx.fillStyle = "red";
+        ctx.fillStyle = "rgba(255,255,255,0.15)";
         ctx.fillRect(bodyX, sy, bodyWidth, size);
       }
 
