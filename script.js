@@ -8,8 +8,8 @@ import {
 } from "./script_files/player.js";
 import { setupChat } from "./script_files/chat.js";
 import { render } from "./script_files/render/render.js";
-import { showSpriteMenu } from "./script_files/UI/spriteMenu.js";
 import { setCrosshairOptions } from "./script_files/crosshair.js";
+import { showSpriteMenu } from "./UI/spriteMenu.js";
 
 const keys = {};
 
