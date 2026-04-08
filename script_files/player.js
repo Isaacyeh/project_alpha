@@ -220,8 +220,9 @@ export function update() {
     state.onGround = true;
   }
 
-  const qPressed = !blockControls && Boolean(keysRef.q);
-  const mousePressed = !blockControls && Boolean(mouseRef.buttons[0]);
+  const canShoot = !blockControls && !state.player.sneaking;
+  const qPressed = canShoot && Boolean(keysRef.q);
+  const mousePressed = canShoot && Boolean(mouseRef.buttons[0]);
   const shouldShoot = (qPressed && !wasQPressed) || (mousePressed && !wasMousePressed);
   
   const mouseMoveX = mouseRef.dx || 0;

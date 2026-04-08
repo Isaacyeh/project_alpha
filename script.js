@@ -61,6 +61,8 @@ let pendingCrosshairImage = "";
 let appliedCrosshairImage = "";
 let pendingCrosshairOpacity = Number(crosshairOpacityInput.value);
 let appliedCrosshairOpacity = Number(crosshairOpacityInput.value);
+let pendingCrosshairBlobUrl = null;
+let appliedCrosshairBlobUrl = null;
 menu.classList.add("hidden");
 customizationOverlay.classList.add("hidden");
 setCrosshairOptions({ opacity: appliedCrosshairOpacity, imageSrc: "" });
@@ -139,16 +141,24 @@ crosshairOpacityInput.addEventListener("input", (e) => {
 crosshairImageInput.addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (loadEvent) => {
-    pendingCrosshairImage = String(loadEvent.target.result || "");
-  };
-  reader.readAsDataURL(file);
+
+  if (pendingCrosshairBlobUrl) {
+    URL.revokeObjectURL(pendingCrosshairBlobUrl);
+    pendingCrosshairBlobUrl = null;
+  }
+
+  pendingCrosshairBlobUrl = URL.createObjectURL(file);
+  pendingCrosshairImage = pendingCrosshairBlobUrl;
 });
 
 confirmCustomization.addEventListener("click", () => {
+  if (appliedCrosshairBlobUrl && appliedCrosshairBlobUrl !== pendingCrosshairBlobUrl) {
+    URL.revokeObjectURL(appliedCrosshairBlobUrl);
+  }
+
   appliedCrosshairImage = pendingCrosshairImage;
   appliedCrosshairOpacity = pendingCrosshairOpacity;
+  appliedCrosshairBlobUrl = pendingCrosshairBlobUrl;
   setCrosshairOptions({
     opacity: appliedCrosshairOpacity,
     imageSrc: appliedCrosshairImage,
