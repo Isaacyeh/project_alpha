@@ -31,6 +31,8 @@ const state = {
   cooldown: 0,
   canRespawn: false,
   isRespawning: false, // ADD THIS
+  inMenu: false,
+  sprite: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzsRyhF1hwCvj9rwrjvQvXLKupdnrDIH8gyw&s", // Default sprite
   username:
     (prompt("Enter your username:") || "Anonymous").trim() || "Anonymous",
 };
@@ -76,20 +78,36 @@ export function setMyId(id) {
 }
 
 export function setOthers(nextOthers) {
-  if (state.myId && nextOthers[state.myId] !== undefined) {
-    const serverHealth = nextOthers[state.myId].health;
-    if (!state.isDead && !state.isRespawning && serverHealth <= 0) {
-      state.health = 0;
-      state.isDead = true;
-      state.deathTimer = 0;
-      state.canRespawn = false;
-      state.projectiles = [];
+  const filtered = { ...nextOthers };
+  if (state.myId && filtered[state.myId] !== undefined) {
+    const serverHealth = filtered[state.myId].health;
+    if (!state.inMenu) {
+      if (!state.isDead && !state.isRespawning && serverHealth <= 0) {
+        state.health = 0;
+        state.isDead = true;
+        state.deathTimer = 0;
+        state.canRespawn = false;
+        state.projectiles = [];
+      }
+      if (!state.isDead) {
+        state.health = serverHealth;
+      }
     }
-    if (!state.isDead) {
-      state.health = serverHealth;
-    }
+    delete filtered[state.myId];
   }
-  state.others = { ...nextOthers };
+  state.others = filtered;
+}
+
+export function setSprite(url) {
+  state.sprite = url;
+}
+
+export function setMenuOpen(value) {
+  state.inMenu = Boolean(value);
+  if (!value) {
+    // When menu closes, reset to full health
+    state.health = MAX_HEALTH;
+  }
 }
 
 export function getState() {
@@ -135,6 +153,11 @@ function canMove(x, y) {
 export function update() {
   if (!keysRef || !wsRef || !mouseRef) return;
 
+  if (state.inMenu) {
+    // Block all input while menu is open
+    return;
+  }
+
   if (state.isDead) {
     state.deathTimer++;
     // Unlock respawn button after 5 seconds (300 frames)
@@ -160,29 +183,29 @@ export function update() {
 
   const { player } = state;
 
-  if (!state.isChatting && keysRef.ArrowLeft) player.angle -= 0.04;
-  if (!state.isChatting && keysRef.ArrowRight) player.angle += 0.04;
+  if (keysRef.ArrowLeft) player.angle -= 0.04;
+  if (keysRef.ArrowRight) player.angle += 0.04;
 
   let moveX = 0;
   let moveY = 0;
 
   // Update sneaking state
-  state.player.sneaking = !state.isChatting && keysRef.Shift;
+  state.player.sneaking = keysRef.Shift;
   let sneakSpeed = state.player.sneaking ? 0.4 : 1;
 
-  if (!state.isChatting && (keysRef.w || keysRef.W)) {
+  if (keysRef.w || keysRef.W) {
     moveX += Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
     moveY += Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
   }
-  if (!state.isChatting && (keysRef.s || keysRef.S)) {
+  if (keysRef.s || keysRef.S) {
     moveX -= Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
     moveY -= Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
   }
-  if (!state.isChatting && (keysRef.a || keysRef.A)) {
+  if (keysRef.a || keysRef.A) {
     moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
     moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
   }
-  if (!state.isChatting && (keysRef.d || keysRef.D)) {
+  if (keysRef.d || keysRef.D) {
     moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
     moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
   }
@@ -198,7 +221,7 @@ export function update() {
     if (canMove(player.x, ny)) player.y = ny;
   }
 
-  if (!state.isChatting && keysRef[" "] && state.onGround) {
+  if (keysRef[" "] && state.onGround) {
     state.zVel = JUMP_VELOCITY;
     state.onGround = false;
   }

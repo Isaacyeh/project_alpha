@@ -139,6 +139,7 @@ wss.on("connection", (ws) => {
     username: ws.username,
     projectiles: [],
     health: MAX_HEALTH,
+    sprite: "/images/sprite1.png", // Default sprite
   };
 
   ws.send(JSON.stringify({ type: "init", id }));
@@ -175,6 +176,20 @@ wss.on("connection", (ws) => {
       ws.username = String(data.name || "Anonymous").trim() || "Anonymous";
       if (players[id]) players[id].username = ws.username;
       broadcastDebug(`Player set name: ${ws.username}`);
+      return;
+    }
+
+    if (data.type === "setSprite") {
+      if (players[id]) players[id].sprite = data.sprite;
+      broadcastDebug(`${ws.username} set sprite`);
+      return;
+    }
+
+    if (data.type === "menuClosed") {
+      if (players[id]) {
+        players[id].health = MAX_HEALTH;
+        broadcastDebug(`${ws.username} exited menu - health reset to ${MAX_HEALTH}`);
+      }
       return;
     }
 

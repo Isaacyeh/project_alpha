@@ -102,11 +102,6 @@ canvas {
   gap: 10px 10px;
   margin:20px;
 }
-  
-body {
-  margin: 0;
-  font-family: arial;
-}
 
 .title {
   background-color: lightslategray;
@@ -120,4 +115,81 @@ body {
   text-align: center;
   font-size: 45px;
   margin: 10px 0;
+}
+
+/* Sprite menu styling */
+.sprite-menu {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  border: 2px solid #ccc;
+  padding: 20px;
+  z-index: 2000;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: white;
+  border-radius: 10px;
+}
+
+.sprite-menu h2 {
+  text-align: center;
+  color: lightslategray;
+  margin-top: 0;
+}
+
+#spriteGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.sprite-option {
+  width: 80px;
+  height: 80px;
+  border: 2px solid gray;
+  padding: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 5px;
+}
+
+.sprite-option:hover {
+  border-color: lightslategray;
+  transform: scale(1.1);
+}
+
+.sprite-option.selected {
+  border-color: lightslategray;
+  box-shadow: 0 0 10px lightslategray;
+  background-color: rgba(119, 136, 153, 0.3);
+}
+
+.sprite-menu label {
+  display: block;
+  margin: 10px 0 5px 0;
+  color: lightslategray;
+}
+
+#customSprite {
+  margin-bottom: 15px;
+}
+
+#confirmSprite {
+  width: 100%;
+  padding: 10px;
+  background-color: lightslategray;
+  color: black;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+#confirmSprite:hover {
+  background-color: #8ca3b0;
 }
