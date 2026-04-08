@@ -14,7 +14,7 @@ const keys = {};
 const mouse = { x: 0, y: 0, dx: 0, dy: 0, buttons: {}};
 
 window.addEventListener("mousemove", (e) => {
-  if (!customizationOverlay.classList.contains("hidden")) {
+  if (isAnyMenuOpen()) {
     mouse.dx = 0;
     mouse.dy = 0;
     return;
@@ -29,14 +29,14 @@ window.addEventListener("mousemove", (e) => {
 });
 
 window.addEventListener("keydown", (e) => {
-  if (!customizationOverlay.classList.contains("hidden")) return;
+  if (isAnyMenuOpen()) return;
   keys[e.key] = true;
 });
 window.addEventListener("keyup", (e) => {
   keys[e.key] = false;
 });
 window.addEventListener("mousedown", (e) => {
-  if (!customizationOverlay.classList.contains("hidden")) return;
+  if (isAnyMenuOpen()) return;
   mouse.buttons[e.button] = true;
 });
 window.addEventListener("mouseup", (e) => {
@@ -57,6 +57,8 @@ let pendingCrosshairImage = "";
 let appliedCrosshairImage = "";
 let pendingCrosshairOpacity = Number(crosshairOpacityInput.value);
 let appliedCrosshairOpacity = Number(crosshairOpacityInput.value);
+menu.classList.add("hidden");
+customizationOverlay.classList.add("hidden");
 
 function clearInputState() {
   Object.keys(keys).forEach((key) => {
@@ -67,13 +69,26 @@ function clearInputState() {
   mouse.buttons = {};
 }
 
+function isCustomizationOpen() {
+  return !customizationOverlay.classList.contains("hidden");
+}
+
+function isAnyMenuOpen() {
+  return !menu.classList.contains("hidden") || isCustomizationOpen();
+}
+
+function syncMenuControlState() {
+  setMenuOpen(isAnyMenuOpen());
+}
+
 function openCustomizationOverlay() {
+  if (menu.classList.contains("hidden")) return;
   customizationOverlay.classList.remove("hidden");
   customizationOverlay.setAttribute("aria-hidden", "false");
   crosshairOpacityInput.value = String(appliedCrosshairOpacity);
   pendingCrosshairOpacity = appliedCrosshairOpacity;
   pendingCrosshairImage = appliedCrosshairImage;
-  setMenuOpen(true);
+  syncMenuControlState();
   clearInputState();
   if (document.pointerLockElement === canvas) {
     document.exitPointerLock();
@@ -83,13 +98,13 @@ function openCustomizationOverlay() {
 function closeCustomizationOverlay() {
   customizationOverlay.classList.add("hidden");
   customizationOverlay.setAttribute("aria-hidden", "true");
-  setMenuOpen(false);
+  syncMenuControlState();
   clearInputState();
 }
 
 // Pointer lock setup
 canvas.addEventListener("click", () => {
-  if (!customizationOverlay.classList.contains("hidden")) return;
+  if (isAnyMenuOpen()) return;
   canvas.requestPointerLock();
 });
 
@@ -111,10 +126,12 @@ customizationMenuLink.addEventListener("click", (e) => {
   e.stopPropagation();
   openCustomizationOverlay();
   menu.classList.add("hidden");
+  syncMenuControlState();
 });
 
-closeCustomization.addEventListener("click", () => {
-  closeCustomizationOverlay();
+closeCustomization.addEventListener("click", closeCustomizationOverlay);
+closeCustomization.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
 });
 
 customizationOverlay.addEventListener("click", (e) => {
@@ -174,6 +191,7 @@ ws.addEventListener("message", (e) => {
 });
 
 function loop() {
+  syncMenuControlState();
   update();
   render(canvas, ctx);
   requestAnimationFrame(loop);
