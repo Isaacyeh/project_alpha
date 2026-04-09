@@ -64,7 +64,7 @@ function drawCrosshair(canvas, ctx) {
     const size = 34;
     ctx.drawImage(image, cx - size / 2, cy - size / 2, size, size);
   } else {
-    ctx.fillStyle = "#ffffff";
+    ctx.fillStyle = "#000000";
     ctx.font = "bold 34px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
