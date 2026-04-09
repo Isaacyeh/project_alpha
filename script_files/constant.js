@@ -12,7 +12,7 @@ export const MINIMAP_PADDING = 10;
 //projectile constants
 export const PROJECTILE_SPEED = 0.2;
 export const PROJECTILE_LIFETIME = 120;
-export const PROJECTILE_START_Z = -0.08;
+export const PROJECTILE_START_Z = -0.10; // adjusted to align with crosshair position (4% below horizon)
 export const PROJECTILE_RADIUS = 0.05; // visual radius of the ball
 //health constants
 export const MAX_HEALTH = 1;
