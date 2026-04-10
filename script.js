@@ -58,7 +58,6 @@ function isSettingsOpen() {
   return !settingsOverlay.classList.contains("hidden");
 }
  
-// Only overlay menus (not the hamburger nav) pause the game
 function isAnyMenuOpen() {
   return isCustomizationOpen() || isSettingsOpen();
 }
@@ -96,7 +95,6 @@ window.addEventListener("mouseup", (e) => {
   mouse.buttons[e.button] = false;
 });
  
-// Pointer lock
 canvas.addEventListener("click", () => {
   if (isAnyMenuOpen()) return;
   canvas.requestPointerLock();
@@ -128,7 +126,6 @@ customizationMenuLink.addEventListener("click", (e) => {
 });
 closeCustomization.addEventListener("click", closeCustomizationOverlay);
 closeCustomization.addEventListener("pointerdown", (e) => e.preventDefault());
- 
 customizationOverlay.addEventListener("click", (e) => {
   if (e.target === customizationOverlay) closeCustomizationOverlay();
 });
@@ -156,7 +153,7 @@ confirmCustomization.addEventListener("click", () => {
   closeCustomizationOverlay();
 });
  
-// ── Settings overlay (debug toggles) ─────────────────────────────────────────
+// ── Settings overlay ──────────────────────────────────────────────────────────
 function openSettingsOverlay() {
   settingsOverlay.classList.remove("hidden");
   settingsOverlay.setAttribute("aria-hidden", "false");
@@ -164,29 +161,24 @@ function openSettingsOverlay() {
   clearInputState();
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
- 
 function closeSettingsOverlay() {
   settingsOverlay.classList.add("hidden");
   settingsOverlay.setAttribute("aria-hidden", "true");
   syncMenuControlState();
   clearInputState();
 }
- 
 settingsMenuLink.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();
   menu.classList.add("hidden");
   openSettingsOverlay();
 });
- 
 closeSettings.addEventListener("click", closeSettingsOverlay);
 closeSettings.addEventListener("pointerdown", (e) => e.preventDefault());
- 
 settingsOverlay.addEventListener("click", (e) => {
   if (e.target === settingsOverlay) closeSettingsOverlay();
 });
  
-// Wire each checkbox to its debugToggles entry
 document.querySelectorAll("[data-debug-key]").forEach((checkbox) => {
   const key = checkbox.dataset.debugKey;
   if (!debugToggles[key]) return;
@@ -196,39 +188,132 @@ document.querySelectorAll("[data-debug-key]").forEach((checkbox) => {
   });
 });
  
-// ── WebSocket + game init ─────────────────────────────────────────────────────
+// ── In-game disconnect banner ─────────────────────────────────────────────────
+// Shows a non-blocking top banner if the WS drops mid-game (not on first load —
+// that's handled by loader.js).
+let disconnectBanner = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT = 8;
+ 
+function showDisconnectBanner(msg) {
+  if (disconnectBanner) return;
+  disconnectBanner = document.createElement("div");
+  disconnectBanner.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9000;
+    background: rgba(160,30,30,0.92); color: #fff;
+    font-family: 'Courier New', monospace; font-size: 13px;
+    letter-spacing: 0.12em; text-align: center;
+    padding: 10px; text-transform: uppercase;
+  `;
+  disconnectBanner.textContent = msg;
+  document.body.appendChild(disconnectBanner);
+}
+function updateDisconnectBanner(msg) {
+  if (disconnectBanner) disconnectBanner.textContent = msg;
+}
+function hideDisconnectBanner() {
+  if (disconnectBanner) { disconnectBanner.remove(); disconnectBanner = null; }
+}
+ 
+// ── WebSocket factory (used for both initial connect and mid-game reconnect) ──
 const chat      = document.getElementById("chat");
 const chatInput = document.getElementById("chatInput");
 const sendBtn   = document.getElementById("sendBtn");
  
-const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
-const ws = new WebSocket(wsProtocol + location.host);
+// loader.js already opened a WebSocket and stored the promise on window.
+// We wait for it so we never open a duplicate connection.
+let ws;
+let chatSetup = false;
  
-const { username } = getState();
-setupChat(ws, chatInput, chat, sendBtn, username);
-initPlayer(keys, ws, mouse);
+async function initGame(resolvedWs) {
+  ws = resolvedWs;
+  wireWsHandlers(ws);
  
-// ── WebSocket message handler (outside sprite menu callback) ──────────────────
-ws.addEventListener("message", (e) => {
-  const data = JSON.parse(e.data);
-  if (data.type === "init")    setMyId(data.id);
-  if (data.type === "players") setOthers(data.players);
-});
+  const { username } = getState();
+  if (!chatSetup) {
+    setupChat(ws, chatInput, chat, sendBtn, username);
+    chatSetup = true;
+  }
  
-// ── Game loop ─────────────────────────────────────────────────────────────────
-function loop() {
-  syncMenuControlState();
-  update();
-  render(canvas, ctx);
-  requestAnimationFrame(loop);
+  initPlayer(keys, ws, mouse);
+ 
+  // Game loop
+  function loop() {
+    syncMenuControlState();
+    update();
+    render(canvas, ctx);
+    requestAnimationFrame(loop);
+  }
+  loop();
+ 
+  // Sprite menu shown once
+  showSpriteMenu(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
+      ws.send(JSON.stringify({ type: "menuClosed" }));
+    }
+  });
 }
  
-loop();
+function wireWsHandlers(socket) {
+  socket.addEventListener("message", (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === "init")    setMyId(data.id);
+    if (data.type === "players") setOthers(data.players);
+  });
  
-// ── Sprite menu (shown on top, doesn't block the loop) ───────────────────────
-showSpriteMenu(() => {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
-    ws.send(JSON.stringify({ type: "menuClosed" }));
+  socket.addEventListener("close", (e) => {
+    // Code 1000/1001 = deliberate close (page unload etc.) — don't reconnect
+    if (e.code === 1000 || e.code === 1001) return;
+    handleMidGameDisconnect();
+  });
+ 
+  socket.addEventListener("error", () => {
+    // 'close' will fire after — handled there
+  });
+}
+ 
+function handleMidGameDisconnect() {
+  if (reconnectAttempts >= MAX_RECONNECT) {
+    showDisconnectBanner("Connection lost — please refresh the page.");
+    return;
   }
+ 
+  reconnectAttempts++;
+  const delay = Math.min(1500 * reconnectAttempts, 8000);
+  showDisconnectBanner(`Connection lost — reconnecting (${reconnectAttempts}/${MAX_RECONNECT})...`);
+ 
+  setTimeout(() => {
+    const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
+    const newWs = new WebSocket(wsProtocol + location.host);
+ 
+    newWs.addEventListener("open", () => {
+      ws = newWs;
+      // Re-send identity so the server knows who we are
+      const { username, sprite } = getState();
+      newWs.send(JSON.stringify({ type: "setName",   name: username }));
+      newWs.send(JSON.stringify({ type: "setSprite", sprite }));
+      // Re-wire player module and chat to new socket
+      initPlayer(keys, newWs, mouse);
+      wireWsHandlers(newWs);
+      reconnectAttempts = 0;
+      hideDisconnectBanner();
+    });
+ 
+    newWs.addEventListener("error", () => {});
+    newWs.addEventListener("close", () => handleMidGameDisconnect());
+  }, delay);
+}
+ 
+// ── Boot: wait for loader's WS promise ───────────────────────────────────────
+// loader.js sets window.__gameWsPromise before this module runs.
+// If for any reason it's missing (e.g. loader.js wasn't included), fall back
+// to creating our own WebSocket so the game still works.
+const wsPromise = window.__gameWsPromise || Promise.resolve((() => {
+  const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
+  return new WebSocket(wsProtocol + location.host);
+})());
+ 
+wsPromise.then(initGame).catch((err) => {
+  console.error("[script.js] Failed to get WebSocket from loader:", err);
 });
