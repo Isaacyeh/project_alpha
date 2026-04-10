@@ -190,7 +190,6 @@ settingsOverlay.addEventListener("click", (e) => {
 document.querySelectorAll("[data-debug-key]").forEach((checkbox) => {
   const key = checkbox.dataset.debugKey;
   if (!debugToggles[key]) return;
-  // Initialise checkbox from current toggle state
   checkbox.checked = debugToggles[key].enabled;
   checkbox.addEventListener("change", () => {
     debugToggles[key].enabled = checkbox.checked;
@@ -209,12 +208,7 @@ const { username } = getState();
 setupChat(ws, chatInput, chat, sendBtn, username);
 initPlayer(keys, ws, mouse);
  
-showSpriteMenu(() => {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
-    ws.send(JSON.stringify({ type: "menuClosed" }));
-  }
- 
+// ── WebSocket message handler (outside sprite menu callback) ──────────────────
 ws.addEventListener("message", (e) => {
   const data = JSON.parse(e.data);
   if (data.type === "init")    setMyId(data.id);
@@ -230,3 +224,11 @@ function loop() {
 }
  
 loop();
+ 
+// ── Sprite menu (shown on top, doesn't block the loop) ───────────────────────
+showSpriteMenu(() => {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
+    ws.send(JSON.stringify({ type: "menuClosed" }));
+  }
+});
