@@ -37,8 +37,9 @@ const state = {
   isRespawning: false,
   invincibilityTimer: 0,
   sprite: "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png",
-  username:
-    (prompt("Enter your username:") || "Anonymous").trim() || "Anonymous",
+  // Username intentionally blank — set via promptUsername() after loading screen clears.
+  // Do NOT call prompt() here; it would fire before the loading overlay appears.
+  username: "",
 };
  
 let keysRef = null;
@@ -53,6 +54,18 @@ export function initPlayer(keys, ws, mouse) {
   keysRef = keys;
   wsRef = ws;
   mouseRef = mouse;
+}
+ 
+/**
+ * Show the username prompt and store the result in state.
+ * Must only be called after the loading screen has fully dismissed so the
+ * prompt appears on top of the game, not on top of (or before) the loader.
+ * Returns the chosen name so the caller can forward it to the server.
+ */
+export function promptUsername() {
+  const name = (prompt("Enter your username:") || "Anonymous").trim() || "Anonymous";
+  state.username = name;
+  return name;
 }
  
 export function setIsChatting(value) {

@@ -5,6 +5,7 @@ import {
   setMyId,
   setOthers,
   setMenuOpen,
+  promptUsername,        // ← new: replaces the inline prompt() in player.js
 } from "./script_files/player.js";
 import { setupChat } from "./script_files/chat.js";
 import { render } from "./script_files/render/render.js";
@@ -202,14 +203,7 @@ const chatInput = document.getElementById("chatInput");
 const sendBtn   = document.getElementById("sendBtn");
  
 // ── WebSocket + game init (with retry) ───────────────────────────────────────
-//
-// This is the only section that differs from the original script.js.
-// The game logic (loop, sprite menu, message handler) is 100% unchanged —
-// it is just wrapped inside the ws "open" callback so it only runs once
-// the connection is confirmed. loader.js is purely visual; it owns no state.
- 
 const loader = window.__loader || {
-  // Safety no-ops if loader.js didn't run (e.g. opening index.html directly)
   setProgress: () => {},
   setRetryInfo: () => {},
   showError: (_m, retry) => setTimeout(retry, 3000),
@@ -217,12 +211,10 @@ const loader = window.__loader || {
 };
  
 const WS_MAX_RETRIES   = 10;
-const WS_RETRY_BASE_MS = 1500;   // first retry after 1.5 s
-const WS_RETRY_MAX_MS  = 8000;   // cap at 8 s
-const WS_OPEN_TIMEOUT  = 8000;   // give up on a single attempt after 8 s
+const WS_RETRY_BASE_MS = 1500;
+const WS_RETRY_MAX_MS  = 8000;
+const WS_OPEN_TIMEOUT  = 8000;
  
-// Once the game has started we don't want close events to re-enter the loader
-// retry path. This flag flips true when ws.open fires and the game boots.
 let gameStarted = false;
 let retryCount  = 0;
  
@@ -237,7 +229,6 @@ function connectWebSocket() {
   const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
   const ws = new WebSocket(wsProtocol + location.host);
  
-  // Hard timeout: if open() hasn't fired, close the socket and trigger retry
   const openTimer = setTimeout(() => ws.close(), WS_OPEN_TIMEOUT);
  
   ws.addEventListener("open", () => {
@@ -246,9 +237,12 @@ function connectWebSocket() {
     retryCount  = 0;
     loader.setProgress(90, "Connected — loading game...");
  
-    // ── Everything below is identical to the original script.js ──────────
+    // ── Username prompt fires here, after the loader confirms the connection.
+    // The loader overlay is still visible at this point, so the browser's
+    // prompt() dialog appears on top of the loader — never on a blank/flashing page.
+    const username = promptUsername();
  
-    const { username } = getState();
+    // ── Everything below is identical to the original script.js ──────────
     setupChat(ws, chatInput, chat, sendBtn, username);
     initPlayer(keys, ws, mouse);
  
@@ -275,25 +269,20 @@ function connectWebSocket() {
       }
     });
  
-    // Dismiss loading screen now that the game is running
+    // Dismiss loading screen now that the game loop is running and the
+    // sprite menu is about to appear.
     loader.setProgress(100, "Ready!");
     setTimeout(() => loader.dismiss(), 300);
   });
  
   ws.addEventListener("error", () => {
-    // 'close' always fires after 'error' — all retry logic lives in onclose
     clearTimeout(openTimer);
   });
  
   ws.addEventListener("close", () => {
     clearTimeout(openTimer);
- 
-    // If the game was already running, this is a mid-game drop.
-    // Don't re-show the loader — the game renders fine without a live WS
-    // (players just freeze). A future enhancement could add a reconnect banner.
     if (gameStarted) return;
  
-    // Still in the loading phase — schedule a retry with backoff.
     if (retryCount >= WS_MAX_RETRIES) {
       loader.showError(
         "Could not reach the game server.\n" +
@@ -323,6 +312,5 @@ function connectWebSocket() {
   });
 }
  
-// Kick off — loader shows "Starting..." at 10% while the module was parsing
 loader.setProgress(10, "Loading assets...");
 connectWebSocket();
