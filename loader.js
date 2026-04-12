@@ -1,12 +1,16 @@
 // loader.js — visual loading screen ONLY.
 // Does NOT open WebSockets or touch any game logic.
 // Exposes window.__loader so script.js can drive the progress bar/status
-// and call dismiss() when the connection is confirmed open.
+// and call dismiss(onComplete) when the connection is confirmed open.
+//
+// NOTE: <body class="loading"> is set directly in index.html, and a matching
+// CSS rule in index.html's <style> block hides everything except #game-loader.
+// This means content is hidden from the very first browser paint — no flash.
  
 (function () {
-  const FADE_MS = 500; // must match the CSS transition duration below
+  var FADE_MS = 500;
  
-  const style = document.createElement("style");
+  var style = document.createElement("style");
   style.textContent = `
     #game-loader {
       position: fixed;
@@ -43,7 +47,6 @@
       color: #fff;
       text-shadow: 0 0 28px rgba(119,136,153,0.9), 0 0 56px rgba(119,136,153,0.4);
       margin-bottom: 10px;
-      position: relative;
     }
     .gl-sub {
       font-size: 11px;
@@ -115,82 +118,77 @@
       background: rgba(119,136,153,0.18);
       box-shadow: 0 0 10px rgba(119,136,153,0.35);
     }
- 
-    /*
-     * While this class is on <body>, everything EXCEPT the loader is hidden.
-     * It is added immediately when the page loads and only removed AFTER the
-     * fade-out transition completes — so nothing underneath ever flashes.
-     */
-    body.game-loading > *:not(#game-loader) {
-      visibility: hidden;
-    }
   `;
   document.head.appendChild(style);
  
-  const el = document.createElement("div");
+  var el = document.createElement("div");
   el.id = "game-loader";
-  el.innerHTML = `
-    <div class="gl-title">PROJECT ALPHA</div>
-    <div class="gl-sub">Loading</div>
-    <div class="gl-bar-wrap"><div class="gl-bar" id="gl-bar"></div></div>
-    <div class="gl-status" id="gl-status">Starting...</div>
-    <div class="gl-retry-info" id="gl-retry-info"></div>
-    <div class="gl-error" id="gl-error">
-      <div class="gl-error-msg" id="gl-error-msg"></div>
-      <button class="gl-retry-btn" id="gl-retry-btn">Retry</button>
-    </div>
-  `;
+  el.innerHTML = [
+    '<div class="gl-title">PROJECT ALPHA</div>',
+    '<div class="gl-sub">Loading</div>',
+    '<div class="gl-bar-wrap"><div class="gl-bar" id="gl-bar"></div></div>',
+    '<div class="gl-status" id="gl-status">Starting...</div>',
+    '<div class="gl-retry-info" id="gl-retry-info"></div>',
+    '<div class="gl-error" id="gl-error">',
+    '  <div class="gl-error-msg" id="gl-error-msg"></div>',
+    '  <button class="gl-retry-btn" id="gl-retry-btn">Retry</button>',
+    '</div>',
+  ].join("");
  
+  // Inject overlay as soon as <body> exists.
+  // <body class="loading"> is already set in HTML so content is hidden
+  // from the very first paint — this just adds the visible overlay on top.
   function inject() {
-    document.body.classList.add("game-loading");
     document.body.insertBefore(el, document.body.firstChild);
   }
-  if (document.body) { inject(); } else { document.addEventListener("DOMContentLoaded", inject); }
+  if (document.body) {
+    inject();
+  } else {
+    document.addEventListener("DOMContentLoaded", inject);
+  }
  
   function gid(id) { return document.getElementById(id); }
  
-  // Public API — called by script.js
   window.__loader = {
-    setProgress: function(pct, msg) {
+    setProgress: function (pct, msg) {
       var b = gid("gl-bar");    if (b) b.style.width = pct + "%";
       var s = gid("gl-status"); if (s) s.textContent = msg;
     },
-    setRetryInfo: function(msg) {
+    setRetryInfo: function (msg) {
       var r = gid("gl-retry-info"); if (r) r.textContent = msg;
     },
-    showError: function(msg, onRetry) {
+    showError: function (msg, onRetry) {
       var s = gid("gl-status");    if (s) s.textContent = "Connection failed";
       var e = gid("gl-error");     if (e) e.classList.add("show");
       var m = gid("gl-error-msg"); if (m) m.textContent = msg;
-      var b = gid("gl-retry-btn"); if (b) b.onclick = function() {
+      var b = gid("gl-retry-btn"); if (b) b.onclick = function () {
         var er = gid("gl-error"); if (er) er.classList.remove("show");
         onRetry();
       };
     },
  
     /**
-     * Fade the loader out, then call onComplete once it is fully gone
-     * and the page underneath is revealed. script.js uses this to show
-     * the username prompt only after the screen is completely clear.
+     * Fade the loader out, then reveal the page and call onComplete.
+     *
+     * Order of operations:
+     *   1. Start CSS fade on #game-loader
+     *   2. After FADE_MS: remove #game-loader from DOM
+     *   3. Remove `loading` class from <body>  ← page becomes visible HERE
+     *   4. Call onComplete()                   ← username prompt fires HERE
+     *
+     * The page is never visible while the loader is still on screen.
      */
-    dismiss: function(onComplete) {
+    dismiss: function (onComplete) {
       var l = gid("game-loader");
       if (!l) {
-        // Loader was already removed — just reveal the page and call back.
-        document.body.classList.remove("game-loading");
+        document.body.classList.remove("loading");
         if (typeof onComplete === "function") onComplete();
         return;
       }
- 
-      // Start the CSS fade.
       l.classList.add("fade-out");
- 
-      // After the transition finishes: remove the overlay, then reveal the
-      // page content, then fire the callback. Doing it in this order means
-      // the game canvas is never visible until the loader is fully gone.
-      setTimeout(function() {
+      setTimeout(function () {
         if (l.parentNode) l.parentNode.removeChild(l);
-        document.body.classList.remove("game-loading"); // ← page becomes visible HERE
+        document.body.classList.remove("loading"); // page visible NOW
         if (typeof onComplete === "function") onComplete();
       }, FADE_MS);
     }
