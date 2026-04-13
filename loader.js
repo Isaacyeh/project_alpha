@@ -3,6 +3,9 @@
 // Exposes window.__loader so script.js can drive the progress bar/status
 // and call dismiss(onComplete) when the connection is confirmed open.
 //
+// NEW: addStep(id, label) / updateStep(id, state, label?) for a live step log.
+// Step states: 'wait' | 'ok' | 'fail' | 'info'
+//
 // NOTE: <body class="loading"> is set directly in index.html, and a matching
 // CSS rule in index.html's <style> block hides everything except #game-loader.
 // This means content is hidden from the very first browser paint — no flash.
@@ -53,7 +56,7 @@
       letter-spacing: 0.28em;
       text-transform: uppercase;
       color: #778899;
-      margin-bottom: 52px;
+      margin-bottom: 40px;
     }
     .gl-bar-wrap {
       width: min(400px, 78vw);
@@ -61,7 +64,7 @@
       background: rgba(255,255,255,0.07);
       border-radius: 3px;
       overflow: hidden;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
       border: 1px solid rgba(119,136,153,0.2);
     }
     .gl-bar {
@@ -78,16 +81,77 @@
       color: #778899;
       min-height: 16px;
       text-transform: uppercase;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .gl-retry-info {
       font-size: 10px;
       color: #444;
       letter-spacing: 0.1em;
       min-height: 14px;
+      margin-bottom: 0;
     }
+ 
+    /* ── Step log ─────────────────────────────────────────── */
+    .gl-log {
+      width: min(400px, 78vw);
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .gl-log-entry {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      animation: gl-fadein 0.2s ease;
+      line-height: 1.5;
+    }
+    @keyframes gl-fadein {
+      from { opacity: 0; transform: translateY(3px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .gl-log-icon {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-style: normal;
+    }
+    .gl-log-text { }
+ 
+    /* ok */
+    .gl-log-entry.ok .gl-log-icon { color: #3a9; }
+    .gl-log-entry.ok .gl-log-text { color: #3a9; }
+ 
+    /* in progress — spinning ring */
+    .gl-log-entry.wait .gl-log-icon::before {
+      content: '';
+      display: block;
+      width: 9px;
+      height: 9px;
+      border: 1.5px solid #556677;
+      border-top-color: #99aabb;
+      border-radius: 50%;
+      animation: gl-spin 0.65s linear infinite;
+    }
+    .gl-log-entry.wait .gl-log-text { color: #778899; }
+    @keyframes gl-spin { to { transform: rotate(360deg); } }
+ 
+    /* fail */
+    .gl-log-entry.fail .gl-log-icon { color: #c44; font-size: 12px; }
+    .gl-log-entry.fail .gl-log-text { color: #e66; }
+ 
+    /* info / skipped */
+    .gl-log-entry.info .gl-log-icon { color: #445; font-size: 10px; }
+    .gl-log-entry.info .gl-log-text { color: #4a5a6a; }
+ 
+    /* ── Error box ──────────────────────────────────────────── */
     .gl-error {
-      margin-top: 28px;
+      margin-top: 22px;
       display: none;
       flex-direction: column;
       align-items: center;
@@ -101,6 +165,7 @@
       text-align: center;
       max-width: 340px;
       line-height: 1.7;
+      white-space: pre-line;
     }
     .gl-retry-btn {
       padding: 9px 26px;
@@ -129,6 +194,7 @@
     '<div class="gl-bar-wrap"><div class="gl-bar" id="gl-bar"></div></div>',
     '<div class="gl-status" id="gl-status">Starting...</div>',
     '<div class="gl-retry-info" id="gl-retry-info"></div>',
+    '<div class="gl-log" id="gl-log"></div>',
     '<div class="gl-error" id="gl-error">',
     '  <div class="gl-error-msg" id="gl-error-msg"></div>',
     '  <button class="gl-retry-btn" id="gl-retry-btn">Retry</button>',
@@ -136,8 +202,6 @@
   ].join("");
  
   // Inject overlay as soon as <body> exists.
-  // <body class="loading"> is already set in HTML so content is hidden
-  // from the very first paint — this just adds the visible overlay on top.
   function inject() {
     document.body.insertBefore(el, document.body.firstChild);
   }
@@ -149,14 +213,71 @@
  
   function gid(id) { return document.getElementById(id); }
  
+  // ── Step log state ──────────────────────────────────────────────────────────
+  var steps = {}; // id -> { el, iconEl, textEl }
+ 
+  var ICONS = {
+    ok:   "✓",
+    fail: "✗",
+    wait: "",   // rendered via CSS ::before spinner
+    info: "–",
+  };
+ 
   window.__loader = {
     setProgress: function (pct, msg) {
       var b = gid("gl-bar");    if (b) b.style.width = pct + "%";
-      var s = gid("gl-status"); if (s) s.textContent = msg;
+      var s = gid("gl-status"); if (s) s.textContent = msg || "";
     },
+ 
     setRetryInfo: function (msg) {
-      var r = gid("gl-retry-info"); if (r) r.textContent = msg;
+      var r = gid("gl-retry-info"); if (r) r.textContent = msg || "";
     },
+ 
+    /**
+     * Add a new step row to the log.
+     * @param {string} id       unique key
+     * @param {string} label    display text
+     * @param {string} [state]  'wait'|'ok'|'fail'|'info'  (default 'wait')
+     */
+    addStep: function (id, label, state) {
+      var log = gid("gl-log");
+      if (!log) return;
+      if (steps[id]) { this.updateStep(id, state || "wait", label); return; }
+ 
+      var st = state || "wait";
+      var entry = document.createElement("div");
+      entry.className = "gl-log-entry " + st;
+ 
+      var icon = document.createElement("span");
+      icon.className = "gl-log-icon";
+      icon.textContent = ICONS[st] || "";
+ 
+      var text = document.createElement("span");
+      text.className = "gl-log-text";
+      text.textContent = label;
+ 
+      entry.appendChild(icon);
+      entry.appendChild(text);
+      log.appendChild(entry);
+ 
+      steps[id] = { el: entry, iconEl: icon, textEl: text };
+    },
+ 
+    /**
+     * Update an existing step's state and optionally its label.
+     * @param {string} id
+     * @param {string} state  'wait'|'ok'|'fail'|'info'
+     * @param {string} [label]
+     */
+    updateStep: function (id, state, label) {
+      var s = steps[id];
+      if (!s) { this.addStep(id, label || id, state); return; }
+      // swap class
+      s.el.className = "gl-log-entry " + state;
+      s.iconEl.textContent = ICONS[state] || "";
+      if (label !== undefined) s.textEl.textContent = label;
+    },
+ 
     showError: function (msg, onRetry) {
       var s = gid("gl-status");    if (s) s.textContent = "Connection failed";
       var e = gid("gl-error");     if (e) e.classList.add("show");
@@ -169,14 +290,6 @@
  
     /**
      * Fade the loader out, then reveal the page and call onComplete.
-     *
-     * Order of operations:
-     *   1. Start CSS fade on #game-loader
-     *   2. After FADE_MS: remove #game-loader from DOM
-     *   3. Remove `loading` class from <body>  ← page becomes visible HERE
-     *   4. Call onComplete()                   ← username prompt fires HERE
-     *
-     * The page is never visible while the loader is still on screen.
      */
     dismiss: function (onComplete) {
       var l = gid("game-loader");
@@ -188,9 +301,10 @@
       l.classList.add("fade-out");
       setTimeout(function () {
         if (l.parentNode) l.parentNode.removeChild(l);
-        document.body.classList.remove("loading"); // page visible NOW
+        document.body.classList.remove("loading");
         if (typeof onComplete === "function") onComplete();
       }, FADE_MS);
     }
   };
 })();
+ 

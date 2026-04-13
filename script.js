@@ -63,9 +63,6 @@ function isAnyMenuOpen() {
   return isCustomizationOpen() || isSettingsOpen();
 }
  
-// Track previous state so we only notify player.js on actual transitions.
-// The old code called setMenuOpen() every single frame, which caused
-// "menuClosed" to be sent to the server constantly — resetting health each time.
 let _prevMenuOpen = false;
 function syncMenuControlState() {
   const open = isAnyMenuOpen();
@@ -209,10 +206,12 @@ const sendBtn   = document.getElementById("sendBtn");
  
 // ── WebSocket + game init (with retry) ───────────────────────────────────────
 const loader = window.__loader || {
-  setProgress: () => {},
+  setProgress:  () => {},
   setRetryInfo: () => {},
-  showError: (_m, retry) => setTimeout(retry, 3000),
-  dismiss: (cb) => { if (typeof cb === "function") cb(); },
+  addStep:      () => {},
+  updateStep:   () => {},
+  showError:    (_m, retry) => setTimeout(retry, 3000),
+  dismiss:      (cb) => { if (typeof cb === "function") cb(); },
 };
  
 const WS_MAX_RETRIES   = 10;
@@ -224,33 +223,90 @@ let gameStarted = false;
 let retryCount  = 0;
  
 function connectWebSocket() {
-  loader.setProgress(
-    Math.min(20 + retryCount * 7, 75),
-    retryCount === 0
-      ? "Connecting to server..."
-      : `Server not ready — attempt ${retryCount + 1} of ${WS_MAX_RETRIES}...`
-  );
+  // ── Step: connecting ──────────────────────────────────────────────────────
+  if (retryCount === 0) {
+    loader.setProgress(20, "Connecting to server...");
+    loader.addStep("ws", "Connecting to game server...", "wait");
+  } else {
+    loader.setProgress(
+      Math.min(20 + retryCount * 7, 75),
+      `Attempt ${retryCount + 1} of ${WS_MAX_RETRIES}...`
+    );
+    loader.updateStep("ws", "wait", `Retrying connection... (attempt ${retryCount + 1}/${WS_MAX_RETRIES})`);
+  }
  
   const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
-  const ws = new WebSocket(wsProtocol + location.host);
+  let ws;
  
-  const openTimer = setTimeout(() => ws.close(), WS_OPEN_TIMEOUT);
+  try {
+    ws = new WebSocket(wsProtocol + location.host);
+  } catch (err) {
+    loader.updateStep("ws", "fail", `WebSocket creation failed: ${err.message}`);
+    loader.showError(
+      `Failed to create WebSocket connection.\n${err.message}`,
+      () => { retryCount = 0; connectWebSocket(); }
+    );
+    return;
+  }
+ 
+  const openTimer = setTimeout(() => {
+    loader.updateStep("ws", "fail", "Connection timed out after 8 seconds");
+    ws.close();
+  }, WS_OPEN_TIMEOUT);
  
   ws.addEventListener("open", () => {
     clearTimeout(openTimer);
     gameStarted = true;
     retryCount  = 0;
-    loader.setProgress(100, "Ready!");
  
-    initPlayer(keys, ws, mouse);
+    loader.updateStep("ws", "ok", "Connected to game server");
+    loader.setProgress(55, "Initializing game...");
+    loader.addStep("init", "Initializing player & game loop...", "wait");
+ 
+    try {
+      initPlayer(keys, ws, mouse);
+    } catch (err) {
+      loader.updateStep("init", "fail", `Player init failed: ${err.message}`);
+      loader.showError(
+        `Game initialization error:\n${err.message}\n\nTry refreshing the page.`,
+        () => location.reload()
+      );
+      return;
+    }
  
     ws.addEventListener("message", (e) => {
-      const data = JSON.parse(e.data);
-      if (data.type === "init")    setMyId(data.id);
-      if (data.type === "players") setOthers(data.players);
+      let data;
+      try {
+        data = JSON.parse(e.data);
+      } catch {
+        return; // silently drop malformed messages
+      }
+      if (data.type === "init") {
+        setMyId(data.id);
+        loader.updateStep("init", "ok", "Player initialized — ID assigned");
+        loader.setProgress(75, "Loading assets...");
+        loader.addStep("assets", "Loading sprites & map data...", "wait");
+      }
+      if (data.type === "players") {
+        setOthers(data.players);
+        // Mark assets ready the first time we receive a players broadcast
+        if (!window.__assetsReady) {
+          window.__assetsReady = true;
+          loader.updateStep("assets", "ok", "Sprites & map data ready");
+          loader.setProgress(90, "Starting render loop...");
+          loader.addStep("render", "Starting render loop...", "wait");
+        }
+      }
     });
  
+    let loopStarted = false;
     function loop() {
+      if (!loopStarted) {
+        loopStarted = true;
+        loader.updateStep("render", "ok", "Render loop running");
+        loader.setProgress(100, "Ready!");
+        loader.addStep("join", "Waiting for you to join...", "wait");
+      }
       syncMenuControlState();
       update();
       render(canvas, ctx);
@@ -259,37 +315,64 @@ function connectWebSocket() {
     loop();
  
     loader.dismiss(() => {
-      const username = promptUsername();
+      loader.updateStep("join", "ok", "Joined — welcome!");
  
-      setupChat(ws, chatInput, chat, sendBtn, username);
+      let username;
+      try {
+        username = promptUsername();
+      } catch (err) {
+        username = "Anonymous";
+      }
+ 
+      try {
+        setupChat(ws, chatInput, chat, sendBtn, username);
+      } catch (err) {
+        // Non-fatal — game still runs without chat
+        console.warn("Chat setup failed:", err);
+      }
  
       const { sprite } = getState();
-      ws.send(JSON.stringify({ type: "setName",   name: username }));
-      ws.send(JSON.stringify({ type: "setSprite", sprite }));
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "setName",   name: username }));
+        ws.send(JSON.stringify({ type: "setSprite", sprite }));
+      }
  
       showSpriteMenu(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
           ws.send(JSON.stringify({ type: "menuClosed" }));
         }
+      }).catch((err) => {
+        console.warn("Sprite menu error:", err);
       });
     });
   });
  
-  ws.addEventListener("error", () => {
+  ws.addEventListener("error", (e) => {
     clearTimeout(openTimer);
+    // The 'close' event will fire right after and handle retry logic,
+    // but we can update the step label here with more detail.
+    loader.updateStep("ws", "fail",
+      retryCount < WS_MAX_RETRIES
+        ? "Connection error — will retry..."
+        : "Connection error — max retries reached"
+    );
   });
  
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", (e) => {
     clearTimeout(openTimer);
-    if (gameStarted) return;
+    if (gameStarted) return; // game is live — ignore disconnect here
+ 
+    const reason = e.reason ? ` (${e.reason})` : (e.code ? ` [code ${e.code}]` : "");
  
     if (retryCount >= WS_MAX_RETRIES) {
+      loader.updateStep("ws", "fail", `Could not connect after ${WS_MAX_RETRIES} attempts${reason}`);
       loader.showError(
-        "Could not reach the game server.\n" +
-        "The server may still be starting up — this can take up to 60 seconds.\n" +
-        "Click Retry to try again.",
-        () => { retryCount = 0; connectWebSocket(); }
+        `Could not reach the game server after ${WS_MAX_RETRIES} attempts.\n` +
+        `The server may still be starting — this can take up to 60 seconds.\n` +
+        (reason ? `Last error: ${reason}\n` : "") +
+        `Click Retry to try again.`,
+        () => { retryCount = 0; window.__assetsReady = false; connectWebSocket(); }
       );
       return;
     }
@@ -302,16 +385,26 @@ function connectWebSocket() {
       Math.min(20 + retryCount * 7, 75),
       `Retrying in ${secsLeft}s...`
     );
+    loader.updateStep("ws", "wait", `Retrying in ${secsLeft}s... (attempt ${retryCount + 1}/${WS_MAX_RETRIES})`);
  
     const tick = setInterval(() => {
       secsLeft--;
-      if (secsLeft > 0) loader.setRetryInfo(`Retrying in ${secsLeft}s...`);
-      else { clearInterval(tick); loader.setRetryInfo(""); }
+      if (secsLeft > 0) {
+        loader.setRetryInfo(`Next attempt in ${secsLeft}s`);
+        loader.updateStep("ws", "wait", `Retrying in ${secsLeft}s... (attempt ${retryCount + 1}/${WS_MAX_RETRIES})`);
+      } else {
+        clearInterval(tick);
+        loader.setRetryInfo("");
+      }
     }, 1000);
  
     setTimeout(() => { clearInterval(tick); connectWebSocket(); }, delay);
   });
 }
  
+// ── Kick off ──────────────────────────────────────────────────────────────────
 loader.setProgress(10, "Loading assets...");
+loader.addStep("dom", "Page & scripts loaded", "ok");
+loader.addStep("canvas", "Canvas context ready", "ok");
+ 
 connectWebSocket();
