@@ -5,6 +5,7 @@ import {
   setMyId,
   setOthers,
   setMenuOpen,
+  promptUsername,
 } from "./script_files/player.js";
 import { setupChat } from "./script_files/chat.js";
 import { render } from "./script_files/render/render.js";
@@ -58,7 +59,6 @@ function isSettingsOpen() {
   return !settingsOverlay.classList.contains("hidden");
 }
  
-// Only overlay menus (not the hamburger nav) pause the game
 function isAnyMenuOpen() {
   return isCustomizationOpen() || isSettingsOpen();
 }
@@ -96,7 +96,6 @@ window.addEventListener("mouseup", (e) => {
   mouse.buttons[e.button] = false;
 });
  
-// Pointer lock
 canvas.addEventListener("click", () => {
   if (isAnyMenuOpen()) return;
   canvas.requestPointerLock();
@@ -186,7 +185,6 @@ settingsOverlay.addEventListener("click", (e) => {
   if (e.target === settingsOverlay) closeSettingsOverlay();
 });
  
-// Wire each checkbox to its debugToggles entry
 document.querySelectorAll("[data-debug-key]").forEach((checkbox) => {
   const key = checkbox.dataset.debugKey;
   if (!debugToggles[key]) return;
@@ -196,39 +194,121 @@ document.querySelectorAll("[data-debug-key]").forEach((checkbox) => {
   });
 });
  
-// ── WebSocket + game init ─────────────────────────────────────────────────────
+// ── Chat refs ─────────────────────────────────────────────────────────────────
 const chat      = document.getElementById("chat");
 const chatInput = document.getElementById("chatInput");
 const sendBtn   = document.getElementById("sendBtn");
  
-const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
-const ws = new WebSocket(wsProtocol + location.host);
+// ── WebSocket + game init (with retry) ───────────────────────────────────────
+const loader = window.__loader || {
+  setProgress: () => {},
+  setRetryInfo: () => {},
+  showError: (_m, retry) => setTimeout(retry, 3000),
+  dismiss: (cb) => { if (typeof cb === "function") cb(); },
+};
  
-const { username } = getState();
-setupChat(ws, chatInput, chat, sendBtn, username);
-initPlayer(keys, ws, mouse);
+const WS_MAX_RETRIES   = 10;
+const WS_RETRY_BASE_MS = 1500;
+const WS_RETRY_MAX_MS  = 8000;
+const WS_OPEN_TIMEOUT  = 8000;
  
-// ── WebSocket message handler (outside sprite menu callback) ──────────────────
-ws.addEventListener("message", (e) => {
-  const data = JSON.parse(e.data);
-  if (data.type === "init")    setMyId(data.id);
-  if (data.type === "players") setOthers(data.players);
-});
+let gameStarted = false;
+let retryCount  = 0;
  
-// ── Game loop ─────────────────────────────────────────────────────────────────
-function loop() {
-  syncMenuControlState();
-  update();
-  render(canvas, ctx);
-  requestAnimationFrame(loop);
+function connectWebSocket() {
+  loader.setProgress(
+    Math.min(20 + retryCount * 7, 75),
+    retryCount === 0
+      ? "Connecting to server..."
+      : `Server not ready — attempt ${retryCount + 1} of ${WS_MAX_RETRIES}...`
+  );
+ 
+  const wsProtocol = location.protocol === "https:" ? "wss://" : "ws://";
+  const ws = new WebSocket(wsProtocol + location.host);
+ 
+  const openTimer = setTimeout(() => ws.close(), WS_OPEN_TIMEOUT);
+ 
+  ws.addEventListener("open", () => {
+    clearTimeout(openTimer);
+    gameStarted = true;
+    retryCount  = 0;
+    loader.setProgress(100, "Ready!");
+ 
+    // Start the game loop now — it runs underneath the still-visible loader
+    // so the canvas is warm and ready the moment the overlay disappears.
+    initPlayer(keys, ws, mouse);
+ 
+    ws.addEventListener("message", (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === "init")    setMyId(data.id);
+      if (data.type === "players") setOthers(data.players);
+    });
+ 
+    function loop() {
+      syncMenuControlState();
+      update();
+      render(canvas, ctx);
+      requestAnimationFrame(loop);
+    }
+    loop();
+ 
+    // dismiss() fades the loader out, keeps body.game-loading in place until
+    // the fade is done, then removes the overlay, reveals the page, and only
+    // THEN fires the callback — so the prompt appears on a clean game screen.
+    loader.dismiss(() => {
+      const username = promptUsername();
+ 
+      setupChat(ws, chatInput, chat, sendBtn, username);
+ 
+      const { sprite } = getState();
+      ws.send(JSON.stringify({ type: "setName",   name: username }));
+      ws.send(JSON.stringify({ type: "setSprite", sprite }));
+ 
+      showSpriteMenu(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
+          ws.send(JSON.stringify({ type: "menuClosed" }));
+        }
+      });
+    });
+  });
+ 
+  ws.addEventListener("error", () => {
+    clearTimeout(openTimer);
+  });
+ 
+  ws.addEventListener("close", () => {
+    clearTimeout(openTimer);
+    if (gameStarted) return;
+ 
+    if (retryCount >= WS_MAX_RETRIES) {
+      loader.showError(
+        "Could not reach the game server.\n" +
+        "The server may still be starting up — this can take up to 60 seconds.\n" +
+        "Click Retry to try again.",
+        () => { retryCount = 0; connectWebSocket(); }
+      );
+      return;
+    }
+ 
+    retryCount++;
+    const delay = Math.min(WS_RETRY_BASE_MS * retryCount, WS_RETRY_MAX_MS);
+    let secsLeft = Math.ceil(delay / 1000);
+ 
+    loader.setProgress(
+      Math.min(20 + retryCount * 7, 75),
+      `Retrying in ${secsLeft}s...`
+    );
+ 
+    const tick = setInterval(() => {
+      secsLeft--;
+      if (secsLeft > 0) loader.setRetryInfo(`Retrying in ${secsLeft}s...`);
+      else { clearInterval(tick); loader.setRetryInfo(""); }
+    }, 1000);
+ 
+    setTimeout(() => { clearInterval(tick); connectWebSocket(); }, delay);
+  });
 }
  
-loop();
- 
-// ── Sprite menu (shown on top, doesn't block the loop) ───────────────────────
-showSpriteMenu(() => {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
-    ws.send(JSON.stringify({ type: "menuClosed" }));
-  }
-});
+loader.setProgress(10, "Loading assets...");
+connectWebSocket();
