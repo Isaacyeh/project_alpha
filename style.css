@@ -16,71 +16,55 @@ canvas {
   bottom: 10px;
   right: 10px;
   width: 300px;
-  max-height: 200px;
   background: rgba(0, 0, 0, 0.7);
   border: 1px solid #444;
   padding: 5px;
-  overflow-y: hidden;
   color: white;
   font-family: monospace;
   font-size: 14px;
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
  
 #chat {
   max-height: 150px;
   overflow-y: auto;
-  margin-bottom: 5px;
-  flex: 1;
 }
  
-/* Input row — stretches input, squishes buttons */
-#chatContainer > input,
-#chatContainer > button,
-#chatContainer > label {
-  flex-shrink: 0;
+/* Input row: all three controls on one line */
+#chat-input-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
 }
  
 #chatInput {
-  width: 0;
   flex: 1 1 0;
-  padding: 4px;
   min-width: 0;
+  padding: 4px;
   box-sizing: border-box;
 }
  
-/* Wrap the bottom controls in a flex row */
-#chatContainer {
-  flex-wrap: nowrap;
-}
- 
-/* Make the input row sit in a flex row */
-#chatInput,
 #sendBtn {
-  display: inline-block;
-}
- 
-#sendBtn {
-  padding: 4px 6px;
   flex-shrink: 0;
+  padding: 4px 8px;
+  cursor: pointer;
 }
  
-/* Override the default block layout so input + btn + label line up */
-#chatContainer {
-  display: flex;
-  flex-direction: column;
-}
- 
-/* Wrap the bottom row elements in a div via JS is complex, so instead
-   we use a CSS trick: float the last child items into a row */
-#chatInput {
-  width: 55%;
-}
- 
-#sendBtn {
-  width: 20%;
+/* The emoji label injected by chat.js sits in the same row */
+#chatContainer label[for="chatImageInput"] {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
 }
  
 /* ── Menu ─────────────────────────────────────────────────────────────────── */

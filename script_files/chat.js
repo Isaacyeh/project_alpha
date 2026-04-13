@@ -1,32 +1,31 @@
 import { setIsChatting, getState } from "./player.js";
  
 export function setupChat(ws, chatInput, chat, sendBtn, username) {
-  // ── Image upload button (injected next to sendBtn) ──────────────────────
+  // ── Wrap input row in a flex container ──────────────────────────────────
+  const inputRow = document.createElement("div");
+  inputRow.id = "chat-input-row";
+ 
+  // Move chatInput and sendBtn into the row
+  const container = chatInput.parentNode;
+  container.insertBefore(inputRow, chatInput);
+  inputRow.appendChild(chatInput);
+  inputRow.appendChild(sendBtn);
+ 
+  // ── Image upload button ──────────────────────────────────────────────────
   const imageLabel = document.createElement("label");
   imageLabel.htmlFor = "chatImageInput";
   imageLabel.textContent = "📎";
   imageLabel.title = "Upload image or GIF";
-  imageLabel.style.cssText = `
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    cursor: pointer;
-    font-size: 16px;
-    padding: 4px 0;
-    flex-shrink: 0;
-  `;
  
   const imageInput = document.createElement("input");
   imageInput.type = "file";
   imageInput.id = "chatImageInput";
-  // Accept all image types including GIF explicitly
   imageInput.accept = "image/png,image/jpeg,image/gif,image/webp,image/svg+xml";
   imageInput.style.display = "none";
  
-  // Insert label + hidden input after sendBtn
-  sendBtn.parentNode.insertBefore(imageLabel, sendBtn.nextSibling);
-  sendBtn.parentNode.insertBefore(imageInput, imageLabel.nextSibling);
+  // Append into the same row
+  inputRow.appendChild(imageLabel);
+  inputRow.appendChild(imageInput);
  
   // ── Text message sending ─────────────────────────────────────────────────
   function sendMessage() {
@@ -60,7 +59,6 @@ export function setupChat(ws, chatInput, chat, sendBtn, username) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
  
-    // Cap to 1.5 MB before encoding — base64 adds ~33% overhead making it ~2 MB
     if (file.size > 1_500_000) {
       alert("Image too large — please upload something under 1.5 MB.");
       imageInput.value = "";
@@ -69,11 +67,11 @@ export function setupChat(ws, chatInput, chat, sendBtn, username) {
  
     const reader = new FileReader();
     reader.onload = () => {
-      const imageData = reader.result; // data URL (base64)
+      const imageData = reader.result;
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "chatImage", imageData }));
       }
-      imageInput.value = ""; // reset so the same file can be re-sent
+      imageInput.value = "";
     };
     reader.readAsDataURL(file);
   });
@@ -106,7 +104,6 @@ export function setupChat(ws, chatInput, chat, sendBtn, username) {
         border-radius: 4px;
         cursor: pointer;
       `;
-      // Click to open full-size in a new tab
       img.addEventListener("click", () => {
         window.open(data.imageData, "_blank");
       });

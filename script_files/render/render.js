@@ -4,8 +4,7 @@ import { drawMinimap } from "./minimap.js";
 import { getState, respawn } from "../player.js";
 import { getCrosshairOptions } from "../crosshair.js";
  
-// Cache for player sprite images (static images and first-frame GIFs)
-// GIFs animate automatically because ctx.drawImage is called every frame.
+// Cache for player sprite images
 const playerImages = new Map(); // id -> { img, url }
  
 function getPlayerImage(id, spriteUrl) {
@@ -27,15 +26,11 @@ function getPlayerImage(id, spriteUrl) {
   return img;
 }
  
-/**
- * Returns the border color for a player's hitbox based on their current state.
- * Priority: dead > invincible > sneaking > normal
- */
 function hitboxColor(p) {
-  if (p.isDead || p.health <= 0)  return "#888888"; // grey  — dead
-  if (p.isInvincible)             return "#ffdd00"; // yellow — spawn protection
-  if (p.sneaking)                 return "#00cc44"; // green  — sneaking
-  return "#cc0000";                                  // red    — normal
+  if (p.isDead || p.health <= 0)  return "#888888";
+  if (p.isInvincible)             return "#ffdd00";
+  if (p.sneaking)                 return "#00cc44";
+  return "#cc0000";
 }
  
 function drawSphere(ctx, x, y, radius, color = "#4db8ff") {
@@ -58,6 +53,37 @@ function drawHealthBar(ctx, x, y, width, height, healthRatio) {
   ctx.fillRect(x + pad, y + pad, iw * ratio, ih);
 }
  
+/**
+ * Draw the stamina bar above the health bar.
+ * Flashes red during exhaustion cooldown.
+ */
+function drawStaminaBar(ctx, x, y, width, height, stamina, staminaCooldown) {
+  const ratio = Math.max(0, Math.min(1, stamina));
+  const pad = 2;
+ 
+  // Border
+  ctx.fillStyle = "#555";
+  ctx.fillRect(x, y, width, height);
+ 
+  const iw = Math.max(0, width - pad * 2);
+  const ih = Math.max(0, height - pad * 2);
+ 
+  // Background
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x + pad, y + pad, iw, ih);
+ 
+  if (staminaCooldown > 0) {
+    // Flash red during cooldown
+    const flash = Math.sin(Date.now() / 120) > 0;
+    ctx.fillStyle = flash ? "#cc0000" : "#550000";
+    ctx.fillRect(x + pad, y + pad, iw, ih);
+  } else {
+    // Normal stamina bar (yellow-white)
+    ctx.fillStyle = "#e8e8a0";
+    ctx.fillRect(x + pad, y + pad, iw * ratio, ih);
+  }
+}
+ 
 function drawCrosshair(canvas, ctx) {
   const { opacity, image } = getCrosshairOptions();
   const cx = canvas.width / 2;
@@ -68,7 +94,6 @@ function drawCrosshair(canvas, ctx) {
  
   if (image && image.complete && !image.__error) {
     const size = 34;
-    // Draw every frame so GIF crosshairs animate
     ctx.drawImage(image, cx - size / 2, cy - size / 2, size, size);
   } else {
     ctx.fillStyle = "#000000";
@@ -81,10 +106,12 @@ function drawCrosshair(canvas, ctx) {
   ctx.restore();
 }
  
+// ── Respawn: button click + any key ──────────────────────────────────────────
 let respawnListenerAdded = false;
 function setupRespawnButton(canvas) {
   if (respawnListenerAdded) return;
   respawnListenerAdded = true;
+ 
   canvas.addEventListener("click", (e) => {
     const state = getState();
     if (!state.isDead || !state.canRespawn) return;
@@ -97,11 +124,24 @@ function setupRespawnButton(canvas) {
       respawn();
     }
   });
+ 
+  // Any key also triggers respawn
+  window.addEventListener("keydown", (e) => {
+    const state = getState();
+    if (state.isDead && state.canRespawn) {
+      respawn();
+    }
+  });
 }
  
 export function render(canvas, ctx) {
   setupRespawnButton(canvas);
-  const { player, z, others, myId, projectiles, health, isDead, deathTimer, canRespawn } = getState();
+  const {
+    player, z, others, myId, projectiles,
+    health, isDead, deathTimer, canRespawn,
+    stamina, staminaCooldown,
+  } = getState();
+ 
   const rays = canvas.width;
   const jumpOffset = z * JUMP_SCALE;
   const horizon = canvas.height / 2 + jumpOffset;
@@ -137,7 +177,7 @@ export function render(canvas, ctx) {
     prevTileY = tileY;
   }
  
-  // Collect all sprites (projectiles + remote players)
+  // Collect all sprites
   const allProjectiles = [...projectiles];
   for (const id in others) {
     if (id === myId) continue;
@@ -172,8 +212,13 @@ export function render(canvas, ctx) {
       const sx = (0.5 + norm / FOV) * canvas.width;
       const di = Math.floor(sx);
       if (di < 0 || di >= depth.length || depth[di] < dist) continue;
-      const radius = Math.max(2, canvas.height / Math.max(dist * 10, 0.0001));
-      const sy = horizon - radius - (proj.z || 0) * JUMP_SCALE;
+      // Half the visual radius
+      const radius = Math.max(1, canvas.height / Math.max(dist * 20, 0.0001));
+      // Anchor bullet Y to crosshair level (4% below horizon), then offset
+      // by the difference between the bullet's Z and the player's Z so that
+      // jumping raises both the crosshair and the bullet together.
+      const crosshairY = horizon + canvas.height * 0.04;
+      const sy = crosshairY - ((proj.z || 0) - z) * JUMP_SCALE;
       drawSphere(ctx, sx, sy, radius);
  
     } else {
@@ -193,7 +238,6 @@ export function render(canvas, ctx) {
       const bodyWidth = size / 2;
       const bodyX     = sx - bodyWidth / 2;
  
-      // ── Sprite or fallback rect ──────────────────────────────────────────
       const playerImg = getPlayerImage(sprite.id, p.sprite);
       let drawnX = bodyX, drawnW = bodyWidth;
  
@@ -206,27 +250,23 @@ export function render(canvas, ctx) {
         const aspect = playerImg.naturalWidth / playerImg.naturalHeight;
         drawnW = bodyWidth * aspect;
         drawnX = sx - drawnW / 2;
-        // Drawing every frame is what makes GIF sprites animate
         ctx.drawImage(playerImg, drawnX, sy, drawnW, size);
       } else {
         ctx.fillStyle = "rgba(255,255,255,0.15)";
         ctx.fillRect(bodyX, sy, bodyWidth, size);
       }
  
-      // ── Hitbox state border ──────────────────────────────────────────────
       const borderColor = hitboxColor(p);
-      const borderW = Math.max(2, size * 0.025); // scales with distance
+      const borderW = Math.max(2, size * 0.025);
       ctx.save();
       ctx.strokeStyle = borderColor;
       ctx.lineWidth = borderW;
-      // Flicker the border when invincible so it's extra obvious
       if (p.isInvincible) {
         ctx.globalAlpha = 0.5 + 0.5 * Math.sin(Date.now() / 120);
       }
       ctx.strokeRect(drawnX, sy, drawnW, size);
       ctx.restore();
  
-      // ── Username label ───────────────────────────────────────────────────
       const name = p.username || "Anonymous";
       const fontSize = Math.max(10, Math.min(18, size / 6));
       ctx.font = `${fontSize}px Arial`;
@@ -241,7 +281,6 @@ export function render(canvas, ctx) {
       ctx.fillStyle = "#fff";
       ctx.fillText(name, sx, labelY - 2);
  
-      // ── Health bar ───────────────────────────────────────────────────────
       const remoteHealth = Number.isFinite(p.health) ? p.health : MAX_HEALTH;
       const barW = bodyWidth;
       const barH = Math.max(6, size * 0.07);
@@ -249,13 +288,26 @@ export function render(canvas, ctx) {
     }
   }
  
-  // HUD
+  // ── HUD ──────────────────────────────────────────────────────────────────
   drawMinimap(ctx);
-  const hudW = Math.min(420, canvas.width * 0.55);
-  drawHealthBar(ctx, 24, canvas.height - 50, hudW, 30, health / MAX_HEALTH);
+ 
+  const hudX   = 24;
+  const hudW   = Math.min(420, canvas.width * 0.55);
+  const hpH    = 30;
+  const stH    = 10; // stamina bar height (thinner)
+  const gap    = 6;
+  const hpY    = canvas.height - 50;
+  const stY    = hpY - stH - gap;
+ 
+  // Health bar
+  drawHealthBar(ctx, hudX, hpY, hudW, hpH, health / MAX_HEALTH);
+ 
+  // Stamina bar (above health bar, same width, thinner)
+  drawStaminaBar(ctx, hudX, stY, hudW, stH, stamina, staminaCooldown);
+ 
   drawCrosshair(canvas, ctx);
  
-  // Death screen
+  // ── Death screen ─────────────────────────────────────────────────────────
   if (isDead) {
     ctx.fillStyle = "rgba(180,0,0,0.55)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -266,6 +318,7 @@ export function render(canvas, ctx) {
     ctx.fillText("YOU DIED", canvas.width / 2 + 4, canvas.height / 2 - 36);
     ctx.fillStyle = "#ffffff";
     ctx.fillText("YOU DIED", canvas.width / 2, canvas.height / 2 - 40);
+ 
     if (!canRespawn) {
       const secondsLeft = Math.ceil((300 - deathTimer) / 60);
       ctx.font = "bold 28px Arial";
@@ -286,6 +339,11 @@ export function render(canvas, ctx) {
       ctx.font = "bold 22px Arial";
       ctx.fillStyle = "#ffffff";
       ctx.fillText("RESPAWN", canvas.width / 2, by + 25);
+ 
+      // "or press any key" hint
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "#ffcccc";
+      ctx.fillText("or press any key", canvas.width / 2, by + 65);
     }
   }
 }

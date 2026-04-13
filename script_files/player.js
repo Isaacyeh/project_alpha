@@ -17,6 +17,13 @@ import { debugLog } from "./debug.js";
  
 const SPAWN = { x: 3, y: 17, angle: 0, sneaking: false };
  
+// Stamina constants
+const MAX_STAMINA = 1;
+const STAMINA_DRAIN = 0.005;      // per frame while sprinting
+const STAMINA_REGEN = 0.003;      // per frame while not sprinting
+const STAMINA_COOLDOWN_FRAMES = 180; // 3 seconds at 60fps
+const SPRINT_SPEED_MULT = 1.6;
+ 
 const state = {
   player: { ...SPAWN },
   z: 0,
@@ -36,9 +43,11 @@ const state = {
   canRespawn: false,
   isRespawning: false,
   invincibilityTimer: 0,
+  // Stamina state
+  stamina: MAX_STAMINA,
+  staminaCooldown: 0,       // frames remaining in exhaustion cooldown
+  isSprinting: false,
   sprite: "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png",
-  // Username intentionally blank — set via promptUsername() after loading screen clears.
-  // Do NOT call prompt() here; it would fire before the loading overlay appears.
   username: "",
 };
  
@@ -58,9 +67,7 @@ export function initPlayer(keys, ws, mouse) {
  
 /**
  * Show the username prompt and store the result in state.
- * Must only be called after the loading screen has fully dismissed so the
- * prompt appears on top of the game, not on top of (or before) the loader.
- * Returns the chosen name so the caller can forward it to the server.
+ * Must only be called after the loading screen has fully dismissed.
  */
 export function promptUsername() {
   const name = (prompt("Enter your username:") || "Anonymous").trim() || "Anonymous";
@@ -82,7 +89,7 @@ export function setMenuOpen(value) {
       wsRef.send(JSON.stringify({ type: "menuOpen" }));
     }
   } else {
-    state.health = MAX_HEALTH;
+    // Do NOT reset health here — let the server be authoritative
     state.invincibilityTimer = 0;
     if (wsRef && wsRef.readyState === WebSocket.OPEN) {
       wsRef.send(JSON.stringify({ type: "menuClosed" }));
@@ -107,6 +114,7 @@ export function setOthers(nextOthers) {
         state.canRespawn = false;
         state.projectiles = [];
       }
+      // Always sync health from server when alive
       if (!state.isDead) {
         state.health = serverHealth;
       }
@@ -142,6 +150,9 @@ export function respawn() {
   state.hasShot = false;
   state.cooldown = 0;
   state.projectiles = [];
+  state.stamina = MAX_STAMINA;
+  state.staminaCooldown = 0;
+  state.isSprinting = false;
   debugLog("spawnInvincible", `Respawned — invincibility for ${SPAWN_INVINCIBILITY_DURATION} frames`);
   if (wsRef && wsRef.readyState === WebSocket.OPEN) {
     wsRef.send(JSON.stringify({ type: "respawn" }));
@@ -200,24 +211,46 @@ export function update() {
   let moveX = 0;
   let moveY = 0;
  
-  state.player.sneaking = !blockControls && keysRef.Shift;
+  // Sneak = Control, Sprint = Shift
+  state.player.sneaking = !blockControls && (keysRef.Control || keysRef.ControlLeft || keysRef.ControlRight);
+  const isTryingToSprint = !blockControls && (keysRef.Shift || keysRef.ShiftLeft || keysRef.ShiftRight) && !state.player.sneaking;
+ 
+  // Stamina logic
+  if (isTryingToSprint && state.staminaCooldown === 0 && state.stamina > 0) {
+    state.isSprinting = true;
+    state.stamina = Math.max(0, state.stamina - STAMINA_DRAIN);
+    if (state.stamina === 0) {
+      state.staminaCooldown = STAMINA_COOLDOWN_FRAMES;
+      state.isSprinting = false;
+    }
+  } else {
+    state.isSprinting = false;
+    if (state.staminaCooldown > 0) {
+      state.staminaCooldown--;
+    } else {
+      state.stamina = Math.min(MAX_STAMINA, state.stamina + STAMINA_REGEN);
+    }
+  }
+ 
   const sneakSpeed = state.player.sneaking ? 0.4 : 1;
+  const sprintSpeed = state.isSprinting ? SPRINT_SPEED_MULT : 1;
+  const effectiveSpeed = sneakSpeed * sprintSpeed;
  
   if (!blockControls && (keysRef.w || keysRef.W)) {
-    moveX += Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
-    moveY += Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
+    moveX += Math.cos(player.angle) * MOVE_SPEED * effectiveSpeed;
+    moveY += Math.sin(player.angle) * MOVE_SPEED * effectiveSpeed;
   }
   if (!blockControls && (keysRef.s || keysRef.S)) {
-    moveX -= Math.cos(player.angle) * MOVE_SPEED * sneakSpeed;
-    moveY -= Math.sin(player.angle) * MOVE_SPEED * sneakSpeed;
+    moveX -= Math.cos(player.angle) * MOVE_SPEED * effectiveSpeed;
+    moveY -= Math.sin(player.angle) * MOVE_SPEED * effectiveSpeed;
   }
   if (!blockControls && (keysRef.a || keysRef.A)) {
-    moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
-    moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * sneakSpeed;
+    moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * effectiveSpeed;
+    moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * effectiveSpeed;
   }
   if (!blockControls && (keysRef.d || keysRef.D)) {
-    moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
-    moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * sneakSpeed;
+    moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * effectiveSpeed;
+    moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * effectiveSpeed;
   }
  
   const nx = player.x + moveX;

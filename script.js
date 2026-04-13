@@ -63,8 +63,16 @@ function isAnyMenuOpen() {
   return isCustomizationOpen() || isSettingsOpen();
 }
  
+// Track previous state so we only notify player.js on actual transitions.
+// The old code called setMenuOpen() every single frame, which caused
+// "menuClosed" to be sent to the server constantly — resetting health each time.
+let _prevMenuOpen = false;
 function syncMenuControlState() {
-  setMenuOpen(isAnyMenuOpen());
+  const open = isAnyMenuOpen();
+  if (open !== _prevMenuOpen) {
+    _prevMenuOpen = open;
+    setMenuOpen(open);
+  }
 }
  
 // ── Mouse / keyboard guards ───────────────────────────────────────────────────
@@ -234,8 +242,6 @@ function connectWebSocket() {
     retryCount  = 0;
     loader.setProgress(100, "Ready!");
  
-    // Start the game loop now — it runs underneath the still-visible loader
-    // so the canvas is warm and ready the moment the overlay disappears.
     initPlayer(keys, ws, mouse);
  
     ws.addEventListener("message", (e) => {
@@ -252,9 +258,6 @@ function connectWebSocket() {
     }
     loop();
  
-    // dismiss() fades the loader out, keeps body.game-loading in place until
-    // the fade is done, then removes the overlay, reveals the page, and only
-    // THEN fires the callback — so the prompt appears on a clean game screen.
     loader.dismiss(() => {
       const username = promptUsername();
  
