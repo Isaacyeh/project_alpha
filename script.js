@@ -5,11 +5,12 @@ import {
   setMyId,
   setOthers,
   setMenuOpen,
+  setSprite,
   promptUsername,
 } from "./script_files/player.js";
 import { setupChat } from "./script_files/chat.js";
 import { render } from "./script_files/render/render.js";
-import { showSpriteMenu } from "./UI/spriteMenu.js";
+import { loadSprites } from "./UI/spriteMenu.js";
 import { setCrosshairOptions } from "./script_files/crosshair.js";
 import { debugToggles } from "./script_files/debug.js";
  
@@ -37,6 +38,10 @@ let pendingCrosshairOpacity = Number(crosshairOpacityInput.value);
 let appliedCrosshairOpacity = Number(crosshairOpacityInput.value);
 let pendingCrosshairBlobUrl = null;
 let appliedCrosshairBlobUrl = null;
+ 
+// ── Skin / sprite state ───────────────────────────────────────────────────────
+let pendingSkinUrl  = "";   // selected but not yet confirmed
+let pendingSkinBlob = null; // blob URL for uploaded custom image
  
 menu.classList.add("hidden");
 customizationOverlay.classList.add("hidden");
@@ -106,6 +111,93 @@ canvas.addEventListener("click", () => {
   canvas.requestPointerLock();
 });
  
+// ── Skin preview helper ───────────────────────────────────────────────────────
+function updateSkinPreview(url) {
+  const preview = document.getElementById("skinPreviewImg");
+  if (!preview) return;
+  if (url) {
+    preview.src = url;
+    preview.style.display = "block";
+  } else {
+    preview.style.display = "none";
+  }
+}
+ 
+// ── Build skin section inside customization overlay ───────────────────────────
+async function buildSkinSection() {
+  const container = document.getElementById("skinSection");
+  if (!container) return;
+ 
+  const spritesData = await loadSprites();
+ 
+  container.innerHTML = `
+    <hr style="border-color:#444; margin: 14px 0;">
+    <h3 style="color: lightslategray; margin: 0 0 10px;">Character Skin</h3>
+ 
+    <div class="field-group">
+      <label for="skinPresetSelect">Preset skins</label>
+      <select id="skinPresetSelect" style="
+        background:#1e1e1e; color:#fff; border:1px solid #666;
+        padding:6px 8px; border-radius:4px; font-size:14px; width:100%;
+      ">
+        <option value="">— Select a preset —</option>
+        ${spritesData.map((s) => `<option value="${s.url}">${s.name}</option>`).join("")}
+      </select>
+    </div>
+ 
+    <div class="field-group" style="margin-top:10px;">
+      <label for="skinUploadInput">Or upload a custom image</label>
+      <input id="skinUploadInput" type="file" accept="image/*" />
+    </div>
+ 
+    <div style="margin-top:10px; display:flex; align-items:center; gap:12px;">
+      <img id="skinPreviewImg" src="" alt="Skin preview" style="
+        display:none; width:64px; height:64px; object-fit:contain;
+        border:1px solid #666; border-radius:4px; background:#111;
+      "/>
+      <span id="skinPreviewLabel" style="color:#aaa; font-size:13px;">No skin selected</span>
+    </div>
+  `;
+ 
+  const presetSelect   = document.getElementById("skinPresetSelect");
+  const skinUpload     = document.getElementById("skinUploadInput");
+  const skinPreviewImg = document.getElementById("skinPreviewImg");
+  const skinLabel      = document.getElementById("skinPreviewLabel");
+ 
+  // Pre-select current skin if it matches a preset
+  const currentSprite = getState().sprite;
+  const match = spritesData.find((s) => s.url === currentSprite);
+  if (match) {
+    presetSelect.value = match.url;
+    pendingSkinUrl = match.url;
+    updateSkinPreview(match.url);
+    skinLabel.textContent = match.name;
+  }
+ 
+  presetSelect.addEventListener("change", (e) => {
+    const url = e.target.value;
+    if (!url) return;
+    // Clear any pending blob from upload
+    if (pendingSkinBlob) { URL.revokeObjectURL(pendingSkinBlob); pendingSkinBlob = null; }
+    skinUpload.value = "";
+    pendingSkinUrl = url;
+    updateSkinPreview(url);
+    const selected = spritesData.find((s) => s.url === url);
+    skinLabel.textContent = selected ? selected.name : "Preset skin";
+  });
+ 
+  skinUpload.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (pendingSkinBlob) { URL.revokeObjectURL(pendingSkinBlob); pendingSkinBlob = null; }
+    pendingSkinBlob = URL.createObjectURL(file);
+    pendingSkinUrl = pendingSkinBlob;
+    presetSelect.value = "";
+    updateSkinPreview(pendingSkinBlob);
+    skinLabel.textContent = file.name;
+  });
+}
+ 
 // ── Customization overlay ─────────────────────────────────────────────────────
 function openCustomizationOverlay() {
   customizationOverlay.classList.remove("hidden");
@@ -113,10 +205,14 @@ function openCustomizationOverlay() {
   crosshairOpacityInput.value = String(appliedCrosshairOpacity);
   pendingCrosshairOpacity = appliedCrosshairOpacity;
   pendingCrosshairImage   = appliedCrosshairImage;
+  // Reset pending skin to currently applied skin
+  pendingSkinUrl = getState().sprite;
+  if (pendingSkinBlob) { URL.revokeObjectURL(pendingSkinBlob); pendingSkinBlob = null; }
   syncMenuControlState();
   clearInputState();
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
+ 
 function closeCustomizationOverlay() {
   customizationOverlay.classList.add("hidden");
   customizationOverlay.setAttribute("aria-hidden", "true");
@@ -149,7 +245,9 @@ crosshairImageInput.addEventListener("change", (e) => {
   pendingCrosshairBlobUrl = URL.createObjectURL(file);
   pendingCrosshairImage   = pendingCrosshairBlobUrl;
 });
+ 
 confirmCustomization.addEventListener("click", () => {
+  // Apply crosshair
   if (appliedCrosshairBlobUrl && appliedCrosshairBlobUrl !== pendingCrosshairBlobUrl) {
     URL.revokeObjectURL(appliedCrosshairBlobUrl);
   }
@@ -157,6 +255,12 @@ confirmCustomization.addEventListener("click", () => {
   appliedCrosshairOpacity = pendingCrosshairOpacity;
   appliedCrosshairBlobUrl = pendingCrosshairBlobUrl;
   setCrosshairOptions({ opacity: appliedCrosshairOpacity, imageSrc: appliedCrosshairImage });
+ 
+  // Apply skin
+  if (pendingSkinUrl) {
+    setSprite(pendingSkinUrl);
+  }
+ 
   closeCustomizationOverlay();
 });
  
@@ -223,7 +327,6 @@ let gameStarted = false;
 let retryCount  = 0;
  
 function connectWebSocket() {
-  // ── Step: connecting ──────────────────────────────────────────────────────
   if (retryCount === 0) {
     loader.setProgress(20, "Connecting to server...");
     loader.addStep("ws", "Connecting to game server...", "wait");
@@ -279,7 +382,7 @@ function connectWebSocket() {
       try {
         data = JSON.parse(e.data);
       } catch {
-        return; // silently drop malformed messages
+        return;
       }
       if (data.type === "init") {
         setMyId(data.id);
@@ -289,7 +392,6 @@ function connectWebSocket() {
       }
       if (data.type === "players") {
         setOthers(data.players);
-        // Mark assets ready the first time we receive a players broadcast
         if (!window.__assetsReady) {
           window.__assetsReady = true;
           loader.updateStep("assets", "ok", "Sprites & map data ready");
@@ -305,7 +407,6 @@ function connectWebSocket() {
         loopStarted = true;
         loader.updateStep("render", "ok", "Render loop running");
         loader.setProgress(100, "Ready!");
-        loader.addStep("join", "Waiting for you to join...", "wait");
       }
       syncMenuControlState();
       update();
@@ -315,8 +416,6 @@ function connectWebSocket() {
     loop();
  
     loader.dismiss(() => {
-      loader.updateStep("join", "ok", "Joined — welcome!");
- 
       let username;
       try {
         username = promptUsername();
@@ -327,7 +426,6 @@ function connectWebSocket() {
       try {
         setupChat(ws, chatInput, chat, sendBtn, username);
       } catch (err) {
-        // Non-fatal — game still runs without chat
         console.warn("Chat setup failed:", err);
       }
  
@@ -337,21 +435,13 @@ function connectWebSocket() {
         ws.send(JSON.stringify({ type: "setSprite", sprite }));
       }
  
-      showSpriteMenu(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "setSprite", sprite: getState().sprite }));
-          ws.send(JSON.stringify({ type: "menuClosed" }));
-        }
-      }).catch((err) => {
-        console.warn("Sprite menu error:", err);
-      });
+      // Build skin section in the customization overlay (async, non-blocking)
+      buildSkinSection().catch((err) => console.warn("Skin section error:", err));
     });
   });
  
-  ws.addEventListener("error", (e) => {
+  ws.addEventListener("error", () => {
     clearTimeout(openTimer);
-    // The 'close' event will fire right after and handle retry logic,
-    // but we can update the step label here with more detail.
     loader.updateStep("ws", "fail",
       retryCount < WS_MAX_RETRIES
         ? "Connection error — will retry..."
@@ -361,7 +451,7 @@ function connectWebSocket() {
  
   ws.addEventListener("close", (e) => {
     clearTimeout(openTimer);
-    if (gameStarted) return; // game is live — ignore disconnect here
+    if (gameStarted) return;
  
     const reason = e.reason ? ` (${e.reason})` : (e.code ? ` [code ${e.code}]` : "");
  

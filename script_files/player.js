@@ -10,7 +10,6 @@ import {
   MAX_HEALTH,
   HIT_DAMAGE,
   PROJECTILE_HIT_RADIUS,
-  SPAWN_INVINCIBILITY_DURATION,
 } from "./constant.js";
 import { isWall } from "./map.js";
 import { debugLog } from "./debug.js";
@@ -42,10 +41,9 @@ const state = {
   cooldown: 0,
   canRespawn: false,
   isRespawning: false,
-  invincibilityTimer: 0,
   // Stamina state
   stamina: MAX_STAMINA,
-  staminaCooldown: 0,       // frames remaining in exhaustion cooldown
+  staminaCooldown: 0,
   isSprinting: false,
   sprite: "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png",
   username: "",
@@ -89,8 +87,6 @@ export function setMenuOpen(value) {
       wsRef.send(JSON.stringify({ type: "menuOpen" }));
     }
   } else {
-    // Do NOT reset health here — let the server be authoritative
-    state.invincibilityTimer = 0;
     if (wsRef && wsRef.readyState === WebSocket.OPEN) {
       wsRef.send(JSON.stringify({ type: "menuClosed" }));
     }
@@ -114,7 +110,6 @@ export function setOthers(nextOthers) {
         state.canRespawn = false;
         state.projectiles = [];
       }
-      // Always sync health from server when alive
       if (!state.isDead) {
         state.health = serverHealth;
       }
@@ -126,6 +121,10 @@ export function setOthers(nextOthers) {
  
 export function setSprite(url) {
   state.sprite = url;
+  // Immediately sync to server if connected
+  if (wsRef && wsRef.readyState === WebSocket.OPEN) {
+    wsRef.send(JSON.stringify({ type: "setSprite", sprite: url }));
+  }
 }
  
 export function getState() {
@@ -138,7 +137,6 @@ export function respawn() {
   state.canRespawn = false;
   state.deathTimer = 0;
   state.isRespawning = true;
-  state.invincibilityTimer = SPAWN_INVINCIBILITY_DURATION;
   state.player.x = SPAWN.x;
   state.player.y = SPAWN.y;
   state.player.angle = SPAWN.angle;
@@ -153,7 +151,6 @@ export function respawn() {
   state.stamina = MAX_STAMINA;
   state.staminaCooldown = 0;
   state.isSprinting = false;
-  debugLog("spawnInvincible", `Respawned — invincibility for ${SPAWN_INVINCIBILITY_DURATION} frames`);
   if (wsRef && wsRef.readyState === WebSocket.OPEN) {
     wsRef.send(JSON.stringify({ type: "respawn" }));
   }
@@ -175,11 +172,6 @@ export function update() {
   if (!keysRef || !wsRef || !mouseRef) return;
  
   if (state.inMenu) return;
- 
-  if (state.invincibilityTimer > 0) {
-    state.invincibilityTimer--;
-    debugLog("spawnInvincible", `Invincibility frames left: ${state.invincibilityTimer}`);
-  }
  
   if (state.isDead) {
     state.deathTimer++;
@@ -211,11 +203,9 @@ export function update() {
   let moveX = 0;
   let moveY = 0;
  
-  // Sneak = Control, Sprint = Shift
   state.player.sneaking = !blockControls && (keysRef.Control || keysRef.ControlLeft || keysRef.ControlRight);
   const isTryingToSprint = !blockControls && (keysRef.Shift || keysRef.ShiftLeft || keysRef.ShiftRight) && !state.player.sneaking;
  
-  // Stamina logic
   if (isTryingToSprint && state.staminaCooldown === 0 && state.stamina > 0) {
     state.isSprinting = true;
     state.stamina = Math.max(0, state.stamina - STAMINA_DRAIN);

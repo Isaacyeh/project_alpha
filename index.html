@@ -3,23 +3,12 @@
   <head>
     <title>Web Doom-like</title>
  
-    <!--
-      This <style> block is the very first thing the browser parses.
-      It hides the body before ANY script or stylesheet loads, which
-      prevents the flash of unstyled / un-rendered content.
-      loader.js will remove the `loading` class once the overlay is gone.
-    -->
     <style>
       body.loading > *:not(#game-loader) {
         visibility: hidden;
       }
     </style>
  
-    <!--
-      loader.js runs synchronously (no defer/async) so it executes
-      immediately during HTML parsing, before the browser paints anything.
-      It adds the `loading` class to <body> and injects the overlay.
-    -->
     <script src="loader.js"></script>
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -53,15 +42,12 @@
  
     <canvas id="game" width="800" height="500"></canvas>
  
-    <div id="spriteMenu" class="sprite-menu hidden">
-      <!-- Populated by spriteMenu.js -->
-    </div>
- 
-    <!-- Crosshair customization overlay -->
+    <!-- Crosshair + Skin customization overlay -->
     <div id="customizationOverlay" class="overlay hidden" aria-hidden="true">
       <div class="overlay-window">
         <button id="closeCustomization" type="button" class="overlay-close" aria-label="Close">✕</button>
-        <h2>Crosshair Customization</h2>
+        <h2>Customization</h2>
+ 
         <div class="field-group">
           <label for="crosshairImageInput">Upload crosshair image / GIF</label>
           <input id="crosshairImageInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" />
@@ -70,6 +56,10 @@
           <label for="crosshairOpacityInput">Crosshair opacity</label>
           <input id="crosshairOpacityInput" type="range" min="0.1" max="1" step="0.05" value="1" />
         </div>
+ 
+        <!-- Skin section injected by script.js after sprites.json loads -->
+        <div id="skinSection"></div>
+ 
         <button id="confirmCustomization" type="button" class="confirm-button">Confirm</button>
       </div>
     </div>

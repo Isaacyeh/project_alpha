@@ -27,8 +27,6 @@ const PROJECTILE_HIT_RADIUS_Z = PLAYER_RADIUS + PROJECTILE_RADIUS; // 0.225
 const MAX_HEALTH = 1;
 const MAX_PROJECTILES_PER_PLAYER = 20;
  
-const SPAWN_INVINCIBILITY_MS = 3_000; // 3 s post-spawn/respawn window
- 
 const SPAWN = { x: 3, y: 17, angle: 0 };
  
 const players = {};
@@ -54,7 +52,6 @@ function safeNum(v, fallback, min = -Infinity, max = Infinity) {
 }
  
 function _doBroadcastPlayers() {
-  const now = Date.now();
   const cleanedPlayers = {};
  
   for (const id in players) {
@@ -70,7 +67,7 @@ function _doBroadcastPlayers() {
       sprite: p.sprite,
       sneaking: p.sneaking,
       isDead: p.health <= 0,
-      isInvincible: p.inMenu || now < (p.invincibleUntil || 0),
+      isInvincible: p.inMenu || false,
     };
   }
  
@@ -119,8 +116,6 @@ function pointToSegmentDist(px, py, ax, ay, bx, by) {
 }
  
 function checkProjectileHits() {
-  const now = Date.now();
- 
   for (const shooterId in players) {
     const projectiles = players[shooterId].projectiles || [];
  
@@ -138,9 +133,8 @@ function checkProjectileHits() {
         const victim = players[victimId];
         if (victim.health <= 0) continue;
  
-        // Protected while in menu (name/sprite selection) OR in timed post-spawn window
+        // Protected while in the customization menu
         if (victim.inMenu) continue;
-        if (now < (victim.invincibleUntil || 0)) continue;
  
         const hitKey = `${shooterId}:${projectile.id}:${victimId}`;
         if (processedHits.has(hitKey)) continue;
@@ -188,10 +182,7 @@ wss.on("connection", (ws) => {
     projectiles: [],
     health: MAX_HEALTH,
     sprite: "/images/sprite1.png",
-    invincibleUntil: 0,
-    // inMenu: true keeps the player fully protected until they confirm the
-    // sprite menu — no arbitrary time limit needed.
-    inMenu: true,
+    inMenu: false,
     sneaking: false,
   };
  
@@ -231,6 +222,7 @@ wss.on("connection", (ws) => {
  
     if (data.type === "setSprite") {
       players[id].sprite = String(data.sprite || "").slice(0, 2048);
+      markDirty();
       return;
     }
  
@@ -240,14 +232,7 @@ wss.on("connection", (ws) => {
     }
  
     if (data.type === "menuClosed") {
-      // Only reset health and grant timed invincibility when leaving the
-      // initial join menu. Subsequent overlay open/close (customization,
-      // settings) must NOT reset health — those don't set inMenu=true anyway.
-      if (players[id].inMenu) {
-        players[id].health = MAX_HEALTH;
-        players[id].invincibleUntil = Date.now() + SPAWN_INVINCIBILITY_MS;
-        players[id].inMenu = false;
-      }
+      players[id].inMenu = false;
       broadcastPlayersNow();
       return;
     }
@@ -256,7 +241,6 @@ wss.on("connection", (ws) => {
       players[id] = {
         ...players[id],
         health: MAX_HEALTH,
-        invincibleUntil: Date.now() + SPAWN_INVINCIBILITY_MS,
         inMenu: false,
         projectiles: [],
         x: SPAWN.x,
