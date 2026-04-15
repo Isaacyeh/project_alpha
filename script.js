@@ -8,6 +8,7 @@ import {
   setSprite,
   promptUsername,
 } from "./script_files/player.js";
+import { SPAWN_INVINCIBILITY_DURATION } from "./script_files/constant.js";
 import { setupChat } from "./script_files/chat.js";
 import { render } from "./script_files/render/render.js";
 import { loadSprites } from "./UI/spriteMenu.js";
@@ -405,6 +406,8 @@ function connectWebSocket() {
     function loop() {
       if (!loopStarted) {
         loopStarted = true;
+        // Grant spawn immunity immediately — covers the name prompt window
+        getState().invincibilityTimer = SPAWN_INVINCIBILITY_DURATION;
         loader.updateStep("render", "ok", "Render loop running");
         loader.setProgress(100, "Ready!");
       }
@@ -433,6 +436,7 @@ function connectWebSocket() {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "setName",   name: username }));
         ws.send(JSON.stringify({ type: "setSprite", sprite }));
+        ws.send(JSON.stringify({ type: "initialSpawn" }));
       }
  
       // Build skin section in the customization overlay (async, non-blocking)

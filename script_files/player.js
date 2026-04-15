@@ -10,6 +10,7 @@ import {
   MAX_HEALTH,
   HIT_DAMAGE,
   PROJECTILE_HIT_RADIUS,
+  SPAWN_INVINCIBILITY_DURATION,
 } from "./constant.js";
 import { isWall } from "./map.js";
 import { debugLog } from "./debug.js";
@@ -41,6 +42,7 @@ const state = {
   cooldown: 0,
   canRespawn: false,
   isRespawning: false,
+  invincibilityTimer: 0,
   // Stamina state
   stamina: MAX_STAMINA,
   staminaCooldown: 0,
@@ -137,6 +139,7 @@ export function respawn() {
   state.canRespawn = false;
   state.deathTimer = 0;
   state.isRespawning = true;
+  state.invincibilityTimer = SPAWN_INVINCIBILITY_DURATION;
   state.player.x = SPAWN.x;
   state.player.y = SPAWN.y;
   state.player.angle = SPAWN.angle;
@@ -172,6 +175,11 @@ export function update() {
   if (!keysRef || !wsRef || !mouseRef) return;
  
   if (state.inMenu) return;
+ 
+  if (state.invincibilityTimer > 0) {
+    state.invincibilityTimer--;
+    debugLog("spawnInvincible", `Invincibility frames left: ${state.invincibilityTimer}`);
+  }
  
   if (state.isDead) {
     state.deathTimer++;

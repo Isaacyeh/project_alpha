@@ -27,6 +27,8 @@ const PROJECTILE_HIT_RADIUS_Z = PLAYER_RADIUS + PROJECTILE_RADIUS; // 0.225
 const MAX_HEALTH = 1;
 const MAX_PROJECTILES_PER_PLAYER = 20;
  
+const SPAWN_INVINCIBILITY_MS = 5_000; // 5 s post-spawn/respawn window
+ 
 const SPAWN = { x: 3, y: 17, angle: 0 };
  
 const players = {};
@@ -67,7 +69,7 @@ function _doBroadcastPlayers() {
       sprite: p.sprite,
       sneaking: p.sneaking,
       isDead: p.health <= 0,
-      isInvincible: p.inMenu || false,
+      isInvincible: p.inMenu || Date.now() < (p.invincibleUntil || 0),
     };
   }
  
@@ -133,8 +135,9 @@ function checkProjectileHits() {
         const victim = players[victimId];
         if (victim.health <= 0) continue;
  
-        // Protected while in the customization menu
+        // Protected while in the customization menu or during spawn invincibility
         if (victim.inMenu) continue;
+        if (Date.now() < (victim.invincibleUntil || 0)) continue;
  
         const hitKey = `${shooterId}:${projectile.id}:${victimId}`;
         if (processedHits.has(hitKey)) continue;
@@ -182,6 +185,7 @@ wss.on("connection", (ws) => {
     projectiles: [],
     health: MAX_HEALTH,
     sprite: "/images/sprite1.png",
+    invincibleUntil: Date.now() + SPAWN_INVINCIBILITY_MS,
     inMenu: false,
     sneaking: false,
   };
@@ -237,10 +241,17 @@ wss.on("connection", (ws) => {
       return;
     }
  
+    if (data.type === "initialSpawn") {
+      players[id].invincibleUntil = Date.now() + SPAWN_INVINCIBILITY_MS;
+      broadcastPlayersNow();
+      return;
+    }
+ 
     if (data.type === "respawn") {
       players[id] = {
         ...players[id],
         health: MAX_HEALTH,
+        invincibleUntil: Date.now() + SPAWN_INVINCIBILITY_MS,
         inMenu: false,
         projectiles: [],
         x: SPAWN.x,
