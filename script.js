@@ -10,7 +10,7 @@ import {
 } from "./script_files/player.js";
 import { SPAWN_INVINCIBILITY_DURATION } from "./script_files/constant.js";
 import { setupChat } from "./script_files/chat.js";
-import { render } from "./script_files/render/render.js";
+import { render, updateLeaderboard } from "./script_files/render/render.js";
 import { loadSprites } from "./UI/spriteMenu.js";
 import { setCrosshairOptions } from "./script_files/crosshair.js";
 import { debugToggles } from "./script_files/debug.js";
@@ -41,8 +41,8 @@ let pendingCrosshairBlobUrl = null;
 let appliedCrosshairBlobUrl = null;
  
 // ── Skin / sprite state ───────────────────────────────────────────────────────
-let pendingSkinUrl  = "";   // selected but not yet confirmed
-let pendingSkinBlob = null; // blob URL for uploaded custom image
+let pendingSkinUrl  = "";
+let pendingSkinBlob = null;
  
 menu.classList.add("hidden");
 customizationOverlay.classList.add("hidden");
@@ -91,6 +91,7 @@ window.addEventListener("mousemove", (e) => {
 });
  
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Tab") return; // Tab handled in render.js, don't block it
   if (isAnyMenuOpen()) return;
   keys[e.key] = true;
 });
@@ -165,7 +166,6 @@ async function buildSkinSection() {
   const skinPreviewImg = document.getElementById("skinPreviewImg");
   const skinLabel      = document.getElementById("skinPreviewLabel");
  
-  // Pre-select current skin if it matches a preset
   const currentSprite = getState().sprite;
   const match = spritesData.find((s) => s.url === currentSprite);
   if (match) {
@@ -178,7 +178,6 @@ async function buildSkinSection() {
   presetSelect.addEventListener("change", (e) => {
     const url = e.target.value;
     if (!url) return;
-    // Clear any pending blob from upload
     if (pendingSkinBlob) { URL.revokeObjectURL(pendingSkinBlob); pendingSkinBlob = null; }
     skinUpload.value = "";
     pendingSkinUrl = url;
@@ -206,7 +205,6 @@ function openCustomizationOverlay() {
   crosshairOpacityInput.value = String(appliedCrosshairOpacity);
   pendingCrosshairOpacity = appliedCrosshairOpacity;
   pendingCrosshairImage   = appliedCrosshairImage;
-  // Reset pending skin to currently applied skin
   pendingSkinUrl = getState().sprite;
   if (pendingSkinBlob) { URL.revokeObjectURL(pendingSkinBlob); pendingSkinBlob = null; }
   syncMenuControlState();
@@ -248,7 +246,6 @@ crosshairImageInput.addEventListener("change", (e) => {
 });
  
 confirmCustomization.addEventListener("click", () => {
-  // Apply crosshair
   if (appliedCrosshairBlobUrl && appliedCrosshairBlobUrl !== pendingCrosshairBlobUrl) {
     URL.revokeObjectURL(appliedCrosshairBlobUrl);
   }
@@ -257,7 +254,6 @@ confirmCustomization.addEventListener("click", () => {
   appliedCrosshairBlobUrl = pendingCrosshairBlobUrl;
   setCrosshairOptions({ opacity: appliedCrosshairOpacity, imageSrc: appliedCrosshairImage });
  
-  // Apply skin
   if (pendingSkinUrl) {
     setSprite(pendingSkinUrl);
   }
@@ -265,7 +261,7 @@ confirmCustomization.addEventListener("click", () => {
   closeCustomizationOverlay();
 });
  
-// ── Settings overlay (debug toggles) ─────────────────────────────────────────
+// ── Settings overlay ──────────────────────────────────────────────────────────
 function openSettingsOverlay() {
   settingsOverlay.classList.remove("hidden");
   settingsOverlay.setAttribute("aria-hidden", "false");
@@ -393,6 +389,10 @@ function connectWebSocket() {
       }
       if (data.type === "players") {
         setOthers(data.players);
+        // Feed leaderboard data into renderer
+        if (data.leaderboard) {
+          updateLeaderboard(data.leaderboard);
+        }
         if (!window.__assetsReady) {
           window.__assetsReady = true;
           loader.updateStep("assets", "ok", "Sprites & map data ready");
@@ -406,7 +406,6 @@ function connectWebSocket() {
     function loop() {
       if (!loopStarted) {
         loopStarted = true;
-        // Grant spawn immunity immediately — covers the name prompt window
         getState().invincibilityTimer = SPAWN_INVINCIBILITY_DURATION;
         loader.updateStep("render", "ok", "Render loop running");
         loader.setProgress(100, "Ready!");
@@ -439,7 +438,6 @@ function connectWebSocket() {
         ws.send(JSON.stringify({ type: "initialSpawn" }));
       }
  
-      // Build skin section in the customization overlay (async, non-blocking)
       buildSkinSection().catch((err) => console.warn("Skin section error:", err));
     });
   });
