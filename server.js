@@ -69,7 +69,7 @@ function _doBroadcastPlayers() {
       sprite: p.sprite,
       sneaking: p.sneaking,
       isDead: p.health <= 0,
-      isInvincible: p.inMenu || Date.now() < (p.invincibleUntil || 0),
+      isInvincible: Date.now() < (p.invincibleUntil || 0),
     };
   }
  
@@ -135,8 +135,7 @@ function checkProjectileHits() {
         const victim = players[victimId];
         if (victim.health <= 0) continue;
  
-        // Protected while in the customization menu or during spawn invincibility
-        if (victim.inMenu) continue;
+        // Protected only during timed spawn invincibility window
         if (Date.now() < (victim.invincibleUntil || 0)) continue;
  
         const hitKey = `${shooterId}:${projectile.id}:${victimId}`;
@@ -232,10 +231,21 @@ wss.on("connection", (ws) => {
  
     if (data.type === "menuOpen") {
       players[id].inMenu = true;
+      // Record when menu opened so we can pause the invincibility clock
+      players[id].menuOpenedAt = Date.now();
       return;
     }
  
     if (data.type === "menuClosed") {
+      // Extend invincibleUntil by however long the menu was open,
+      // so time spent in the menu doesn't eat into spawn protection.
+      if (players[id].menuOpenedAt) {
+        const elapsed = Date.now() - players[id].menuOpenedAt;
+        if (players[id].invincibleUntil > 0) {
+          players[id].invincibleUntil += elapsed;
+        }
+        players[id].menuOpenedAt = 0;
+      }
       players[id].inMenu = false;
       broadcastPlayersNow();
       return;

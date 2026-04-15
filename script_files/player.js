@@ -176,7 +176,7 @@ export function update() {
  
   if (state.inMenu) return;
  
-  if (state.invincibilityTimer > 0) {
+  if (state.invincibilityTimer > 0 && !state.isMenuOpen) {
     state.invincibilityTimer--;
     debugLog("spawnInvincible", `Invincibility frames left: ${state.invincibilityTimer}`);
   }
