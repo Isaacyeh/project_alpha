@@ -32,8 +32,6 @@ export function castRay(angle) {
   const MAX_DIST = 20;
 
   // cosAngleDiff converts perpendicular dist → raw ray dist.
-  // Always take absolute value and clamp away from zero so we
-  // never get a negative or infinite rawDist at extreme FOV edges.
   const cosAngleDiff = Math.max(Math.abs(Math.cos(angle - player.angle)), 0.001);
 
   // If the player's start tile contains partial geometry (pillars, diagonals,
@@ -70,11 +68,20 @@ export function castRay(angle) {
     const geo = getGeometry(char);
     if (!geo) continue;
 
-    // False walls (solid:false, type:"full") — ray passes through so
-    // the player sees whatever solid wall is behind them.
-    if (geo.type === "full" && !geo.solid) continue;
-
     const rawDist = perpDist / cosAngleDiff;
+
+    // False walls: render like a normal full wall visually,
+    // but collision (isWall) already returns false so the player walks through.
+    if (geo.type === "full" && !geo.solid) {
+      return {
+        dist:        rawDist,
+        vertical:    side === 0,
+        heightScale: 1,
+        yOffset:     0,
+        wallX:       getWallX(player, dirX, dirY, mapX, mapY, side, perpDist),
+        isFalseWall: true,
+      };
+    }
 
     if (geo.type === "full") {
       return {
@@ -290,16 +297,4 @@ function castStartTile(player, dirX, dirY, cosAngleDiff, mapX, mapY, geo) {
     return castPillar(player, dirX, dirY, cosAngleDiff, mapX, mapY, geo);
   }
   return null;
-}
-
-const WALL_MARGIN = 0.1;
-
-function canMove(x, y) {
-  const r = PLAYER_RADIUS + WALL_MARGIN;
-  return (
-    !isWall(x + r, y + r) &&
-    !isWall(x - r, y + r) &&
-    !isWall(x + r, y - r) &&
-    !isWall(x - r, y - r)
-  );
 }

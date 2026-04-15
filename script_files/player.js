@@ -15,7 +15,7 @@ import {
 import { isWall } from "./map.js";
 import { debugLog } from "./debug.js";
  
-const SPAWN = { x: 3, y: 3, angle: 0, sneaking: false };
+const SPAWN = { x: 31, y: 7, angle: 0, sneaking: false };
  
 const state = {
   player: { ...SPAWN },
