@@ -1,7 +1,9 @@
 let keysRef = null;
 let mouseRef = null;
 
-export const keybinds = {
+const importedKeybinds = JSON.parse(localStorage.getItem("keybinds"));
+
+const defaults = {
   moveForward: "w",
   moveBackward: "s",
   moveLeft: "a",
@@ -15,7 +17,9 @@ export const keybinds = {
   sprint: "Shift",
 };
 
-const defaults = { ...keybinds };
+
+export const keybinds = (Object.keys(importedKeybinds).length > 0) ? importedKeybinds : defaults;
+//const defaults = { ...keybinds };
 
 const labelMap = {
   moveForward:    "Move forward",
@@ -117,9 +121,19 @@ export function initKeybindMenu(onClose) {
     renderKeybinds();
   });
 
+  document.getElementById("kbSave").addEventListener("click", () => {
+    localStorage.setItem("keybinds", JSON.stringify(keybinds));
+  });
+
   document.getElementById("closeKeybinds").addEventListener("click", () => {
     document.getElementById("keybindsOverlay").classList.add("hidden");
   });
 
   renderKeybinds();
+}
+
+//No repeats
+function validKeybinds() {
+  const values = Object.values(keybinds);
+  return new Set(values).size === values.length;
 }
