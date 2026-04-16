@@ -87,7 +87,6 @@ export function setMenuOpen(value) {
       wsRef.send(JSON.stringify({ type: "menuOpen" }));
     }
   } else {
-    state.invincibilityTimer = 0;
     if (wsRef && wsRef.readyState === WebSocket.OPEN) {
       wsRef.send(JSON.stringify({ type: "menuClosed" }));
     }
@@ -122,6 +121,10 @@ export function setOthers(nextOthers) {
 
 export function setSprite(url) {
   state.sprite = url;
+  // Immediately sync to server if connected
+  if (wsRef && wsRef.readyState === WebSocket.OPEN) {
+    wsRef.send(JSON.stringify({ type: "setSprite", sprite: url }));
+  }
 }
 
 export function getState() {
@@ -153,9 +156,6 @@ export function respawn() {
   state.stamina = MAX_STAMINA;
   state.staminaCooldown = 0;
   state.isSprinting = false;
-
-  debugLog("spawnInvincible", `Respawned`);
-
   if (wsRef && wsRef.readyState === WebSocket.OPEN) {
     wsRef.send(JSON.stringify({ type: "respawn" }));
   }
@@ -177,9 +177,12 @@ function canMove(x, y) {
 export function update() {
   if (!keysRef || !wsRef || !mouseRef) return;
   if (state.inMenu) return;
-
-  if (state.invincibilityTimer > 0) state.invincibilityTimer--;
-
+ 
+  if (state.invincibilityTimer > 0 && !state.isMenuOpen) {
+    state.invincibilityTimer--;
+    debugLog("spawnInvincible", `Invincibility frames left: ${state.invincibilityTimer}`);
+  }
+ 
   if (state.isDead) {
     state.deathTimer++;
     if (state.deathTimer >= 300) state.canRespawn = true;
