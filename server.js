@@ -34,6 +34,9 @@ const SPAWN = { x: 3, y: 17, angle: 0 };
 const players = {};
 const processedHits = new Set();
  
+// Persistent kill/death tracking (survives respawns)
+const playerStats = {}; // id -> { kills: number, deaths: number }
+ 
 let broadcastDirty = false;
  
 // Broadcast loop — 20 Hz
@@ -53,6 +56,18 @@ function safeNum(v, fallback, min = -Infinity, max = Infinity) {
   return isFiniteNum(v) ? Math.min(max, Math.max(min, v)) : fallback;
 }
  
+function buildLeaderboard() {
+  return Object.entries(playerStats)
+    .filter(([id]) => players[id]) // only connected players
+    .map(([id, stats]) => ({
+      id,
+      username: players[id]?.username || "Anonymous",
+      kills: stats.kills,
+      deaths: stats.deaths,
+    }))
+    .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+}
+ 
 function _doBroadcastPlayers() {
   const cleanedPlayers = {};
  
@@ -70,10 +85,13 @@ function _doBroadcastPlayers() {
       sneaking: p.sneaking,
       isDead: p.health <= 0,
       isInvincible: Date.now() < (p.invincibleUntil || 0),
+      kills: playerStats[id]?.kills || 0,
+      deaths: playerStats[id]?.deaths || 0,
     };
   }
  
-  const msg = JSON.stringify({ type: "players", players: cleanedPlayers });
+  const leaderboard = buildLeaderboard();
+  const msg = JSON.stringify({ type: "players", players: cleanedPlayers, leaderboard });
  
   wss.clients.forEach((c) => {
     if (c.readyState === WebSocket.OPEN) {
@@ -152,8 +170,17 @@ function checkProjectileHits() {
         const zDistance = Math.abs((projectile.z || 0) - (victim.z || 0));
  
         if (xyDist <= PROJECTILE_HIT_RADIUS && zDistance <= PROJECTILE_HIT_RADIUS_Z) {
+          const prevHealth = victim.health;
           victim.health = Math.max(0, Number((victim.health - HIT_DAMAGE).toFixed(3)));
           processedHits.add(hitKey);
+ 
+          // Track kill if victim just died
+          if (prevHealth > 0 && victim.health <= 0) {
+            if (!playerStats[shooterId]) playerStats[shooterId] = { kills: 0, deaths: 0 };
+            if (!playerStats[victimId]) playerStats[victimId] = { kills: 0, deaths: 0 };
+            playerStats[shooterId].kills++;
+            playerStats[victimId].deaths++;
+          }
         }
       }
     }
@@ -188,6 +215,11 @@ wss.on("connection", (ws) => {
     inMenu: false,
     sneaking: false,
   };
+ 
+  // Initialize stats for new player
+  if (!playerStats[id]) {
+    playerStats[id] = { kills: 0, deaths: 0 };
+  }
  
   ws.send(JSON.stringify({ type: "init", id }));
  
@@ -231,14 +263,11 @@ wss.on("connection", (ws) => {
  
     if (data.type === "menuOpen") {
       players[id].inMenu = true;
-      // Record when menu opened so we can pause the invincibility clock
       players[id].menuOpenedAt = Date.now();
       return;
     }
  
     if (data.type === "menuClosed") {
-      // Extend invincibleUntil by however long the menu was open,
-      // so time spent in the menu doesn't eat into spawn protection.
       if (players[id].menuOpenedAt) {
         const elapsed = Date.now() - players[id].menuOpenedAt;
         if (players[id].invincibleUntil > 0) {
@@ -303,6 +332,8 @@ wss.on("connection", (ws) => {
  
   ws.on("close", () => {
     delete players[id];
+    // Keep stats in playerStats so kills persist for leaderboard during session
+    // but clean up if desired — here we keep them until server restarts
     broadcastPlayersNow();
   });
 });
