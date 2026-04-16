@@ -31,7 +31,7 @@
       <div id="menu" class="menu hidden">
         <ul>
           <li><a href="#" id="customizationMenuLink">Customization</a></li>
-          <li><a href="#">TBD</a></li>
+          <li><a href="#" id="keybindsMenuLink">Keybinds</a></li>
           <li><a href="#">TBD</a></li>
           <li><a href="#" id="settingsMenuLink">Settings</a></li>
         </ul>
@@ -61,6 +61,17 @@
         <div id="skinSection"></div>
  
         <button id="confirmCustomization" type="button" class="confirm-button">Confirm</button>
+      </div>
+    </div>
+
+    <!-- Keybinds overlay -->
+    <div id="keybindsOverlay" class="overlay hidden" aria-hidden="true">
+      <div class="overlay-window kb-window">
+        <button id="closeKeybinds" type="button" class="overlay-close" aria-label="Close">✕</button>
+        <h2>Keybinds</h2>
+        <p class="overlay-subtitle">Click a binding to reassign it</p>
+        <div class="kb-list" id="kbList"></div>
+        <button class="kb-reset-btn" id="kbReset">Reset to defaults</button>
       </div>
     </div>
  
