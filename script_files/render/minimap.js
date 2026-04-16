@@ -79,10 +79,10 @@ export function drawMinimap(ctx) {
       } else if (geo?.type === "full" && !geo.solid) {
         // False wall — semi-transparent block with an X to show it's passable
         ctx.save();
-        ctx.globalAlpha = 0.45;
+        ctx.globalAlpha = 1;
         ctx.fillRect(px, py, sz, sz);
         ctx.globalAlpha = 0.8;
-        ctx.strokeStyle = "#7070cc";
+        ctx.strokeStyle = "#888888";
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(px + 1, py + 1);
