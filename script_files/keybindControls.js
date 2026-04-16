@@ -15,6 +15,7 @@ const defaults = {
   turnLeft: "ArrowLeft",
   turnRight: "ArrowRight",
   sprint: "Shift",
+  leaderboard: "Tab",
 };
 
 
@@ -33,6 +34,7 @@ const labelMap = {
   turnLeft:       "Turn left",
   turnRight:      "Turn right",
   sprint:         "Sprint",
+  leaderboard:    "Show leaderboard",
 };
 
 export function isPressed(bind) {

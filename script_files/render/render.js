@@ -6,6 +6,17 @@ import { getCrosshairOptions } from "../crosshair.js";
  
 // Cache for player sprite images
 const playerImages = new Map(); // id -> { img, url }
+
+// Leaderboard data (for future UI)
+let leaderboardData = [];
+let leaderboardVisible = false;
+
+export function updateLeaderboard(data) {
+  leaderboardData = data || [];
+  if (leaderboardVisible) {
+    renderLeaderboard();
+  }
+}
  
 function getPlayerImage(id, spriteUrl) {
   if (!spriteUrl) return null;
@@ -133,9 +144,76 @@ function setupRespawnButton(canvas) {
     }
   });
 }
+
+// ── Leaderboard: Tab key handling ───────────────────────────────────────────
+let leaderboardListenerAdded = false;
+function setupLeaderboardHandling() {
+  if (leaderboardListenerAdded) return;
+  leaderboardListenerAdded = true;
+ 
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      toggleLeaderboard();
+    }
+  });
+ 
+  // Close button handler
+  const closeBtn = document.getElementById("closeLeaderboard");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      leaderboardVisible = false;
+      const overlay = document.getElementById("leaderboardOverlay");
+      if (overlay) {
+        overlay.classList.add("hidden");
+        overlay.setAttribute("aria-hidden", "true");
+      }
+    });
+  }
+}
+
+function toggleLeaderboard() {
+  leaderboardVisible = !leaderboardVisible;
+  const overlay = document.getElementById("leaderboardOverlay");
+  if (overlay) {
+    if (leaderboardVisible) {
+      overlay.classList.remove("hidden");
+      overlay.setAttribute("aria-hidden", "false");
+      renderLeaderboard();
+    } else {
+      overlay.classList.add("hidden");
+      overlay.setAttribute("aria-hidden", "true");
+    }
+  }
+}
+
+function renderLeaderboard() {
+  const content = document.getElementById("leaderboardContent");
+  if (!content) return;
+ 
+  if (leaderboardData.length === 0) {
+    content.innerHTML = "<p style='text-align: center; color: #aaa; margin: 20px 0;'>No players yet</p>";
+    return;
+  }
+ 
+  content.innerHTML = leaderboardData.map((entry, index) => {
+    const rank = index + 1;
+    const rankClass = rank <= 3 ? `rank-${rank}` : "";
+    return `
+      <div class="leaderboard-entry ${rankClass}">
+        <div class="leaderboard-name">#${rank} ${entry.username}</div>
+        <div class="leaderboard-stats">
+          <span class="leaderboard-kills">${entry.kills}K</span>
+          <span class="leaderboard-deaths">${entry.deaths}D</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
  
 export function render(canvas, ctx) {
   setupRespawnButton(canvas);
+  setupLeaderboardHandling();
   const {
     player, z, others, myId, projectiles,
     health, isDead, deathTimer, canRespawn,

@@ -140,6 +140,17 @@
       <input id="chatInput" placeholder="Type message..." />
       <button id="sendBtn">Send</button>
     </div>
+
+    <!-- Leaderboard overlay -->
+    <div id="leaderboardOverlay" class="overlay hidden" aria-hidden="true">
+      <div class="overlay-window leaderboard-window">
+        <button id="closeLeaderboard" type="button" class="overlay-close" aria-label="Close">✕</button>
+        <h2>Leaderboard</h2>
+        <div id="leaderboardContent" class="leaderboard-content">
+          <!-- Populated by render.js -->
+        </div>
+      </div>
+    </div>
  
     <script type="module" src="script.js"></script>
   </body>
