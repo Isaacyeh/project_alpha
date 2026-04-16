@@ -162,22 +162,23 @@ export function render(canvas, ctx) {
     const hit = castRay(rayAngle);
     const dist = hit.dist * Math.cos(rayAngle - player.angle);
     const height = canvas.height / Math.max(dist, 0.0001);
+    const drawH  = height * (hit.heightScale ?? 1);          // CHANGED
+    const yShift = height * (hit.yOffset ?? 0);               // CHANGED
     depth[i] = dist;
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(i, horizon - height / 2, 1, height);
+    ctx.fillRect(i, horizon - drawH / 2 + yShift, 1, drawH); // CHANGED
     const hitX = player.x + Math.cos(rayAngle) * hit.dist;
     const hitY = player.y + Math.sin(rayAngle) * hit.dist;
     const tileX = Math.floor(hitX);
     const tileY = Math.floor(hitY);
     if (tileX !== prevTileX || tileY !== prevTileY) {
       ctx.fillStyle = "#000000";
-      ctx.fillRect(i, horizon - height / 2, 1, height);
+      ctx.fillRect(i, horizon - drawH / 2 + yShift, 1, drawH); // CHANGED
     }
     prevTileX = tileX;
     prevTileY = tileY;
   }
- 
-  // Collect all sprites
+  // Collect all sprites (projectiles + remote players)
   const allProjectiles = [...projectiles];
   for (const id in others) {
     if (id === myId) continue;
