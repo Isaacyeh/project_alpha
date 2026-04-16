@@ -380,15 +380,15 @@ canvas {
   color: white;
   font-weight:bold;
   background-color: lightslategray;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  cursor: pointer;
+  cursor: pointer;w
   transition: background 0.15s, color 0.15s;
 }
-.kb-reset-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ccc;
-  border-color: rgba(255, 255, 255, 0.15);
+.kb-save-btn:hover {
+  background: white;
+  color: lightslategray;
+  border-color: lightslategray;
 }
  
 /* ── Settings toggle rows ─────────────────────────────────────────────────── */
