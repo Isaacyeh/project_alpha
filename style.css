@@ -99,7 +99,8 @@ canvas {
 }
  
 .menu li a:hover {
-  text-decoration: line-through;
+  color:lightslategray;
+  background-color: white;
 }
  
 .menu li a:hover::before {
@@ -300,6 +301,94 @@ canvas {
  
 .confirm-button:hover {
   background: #444;
+}
+
+/* -- Keybinds toggle styling ------------------------------------------------ */
+
+/* Keybind rows — mirrors toggle-row styling */
+.kb-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.kb-row:last-child {
+  border-bottom: none;
+}
+.kb-label {
+  font-size: 15px;
+  color: #ddd;
+}
+
+/* Keybind button */
+.kb-bind-btn {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ddd;
+  background: #333;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 4px 12px;
+  min-width: 88px;
+  text-align: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  color:lightslategray;
+  font-weight:bold;
+  transition: background 0.15s, border-color 0.15s;
+}
+.kb-bind-btn:hover {
+  background: #444;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+.kb-bind-btn.listening {
+  background: rgba(119, 136, 153, 0.18);
+  border-color: lightslategray;
+  color: lightslategray;
+  animation: kb-pulse 0.8s infinite alternate;
+}
+@keyframes kb-pulse {
+  from { opacity: 1; }
+  to   { opacity: 0.5; }
+}
+
+/* Reset button */
+.kb-reset-btn {
+  margin-top: 1.1rem;
+  width: 100%;
+  padding: 9px;
+  font-size: 14px;
+  color: #999;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.kb-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ccc;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.kb-save-btn {
+  margin-top: 1.1rem;
+  width: 100%;
+  padding: 9px;
+  font-size: 14px;
+  color: white;
+  font-weight:bold;
+  background-color: lightslategray;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.kb-save-btn:hover {
+  background: white;
+  color: lightslategray;
+  border-color: lightslategray;
 }
  
 /* ── Settings toggle rows ─────────────────────────────────────────────────── */

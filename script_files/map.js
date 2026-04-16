@@ -1,4 +1,5 @@
 export const maps = [
+  // old map
   [
     "------------------------------####-----------------------------------",
     "---------------##############-#--#-----------------------------------",
@@ -31,9 +32,9 @@ export const maps = [
     "#--------#--------------------#-----##-----------------------#------#",
     "#--------#---#-----------#----#-----#-----------##############------#",
     "#--------#####--#-----#--#---##-----#-----------#-------------------#",
-    "#------------#--#-----#--#---#------#-----------#-----##------------#",
+    "#------------#--#-----#--#---#------#-----------#-------------------#",
     "#------------#--#######--#---########----------------#--#-----------#",
-    "#------------#-----------#----------#---####----#----#--------------#",
+    "#------------#-----------#----------#---####----#----#--#-----------#",
     "#------------##----------#--------------####----#----#--#-----------#",
     "#------------#-----##----#####-##################----#--#-----------#",
     "#------------#----#------#--------#------#-----------#--#-----------#",
@@ -61,13 +62,147 @@ export const maps = [
     "#---------------------------------------------------------------#---#",
     "#####################################################################"
   ],
+  [
+    "##################################################################",
+    "#--#---#----------F------##############--------------------------#",
+    "#-/-|-/-|---------F-----/-------------#--------------------------#",
+    "##---F---#--------F----#--####--------#--------------------------#",
+    "#-|-/-|-/---------F----#--#-##---####-###########----------------#",
+    "#--#---#----------F----#--#/-------|#-#---------#----------------#",
+    "#--#---#----------F----F--F-P----P--#-#-P-----P-#----------------#",
+    "#--#---#----------F----#--#---------#-#---------#----------------#",
+    "#--#---#----------F----#--#-----------F---------#----------------#",
+    "#--#---#----------F----#--#---------###---------#---------/|-----#",
+    "#--#---#----------F----#--#---------#-#---------#--------/--|----#",
+    "#--#---#----------F----#--#-P----P--#-#---------#-------/----|---#",
+    "#--#---#----------F----#--#|-------/--#---------#------#------#--#",
+    "#--|---/----------F----/--#-###-###---#---------######/--P--P--|-#",
+    "#---|F/-----------F---/---#--/---|----#----------#---#----------|#",
+    "#F#----##---------F--/----#-/-----|---#-P-----P----#------------/#",
+    "#-#----#----------F-/--/#-|/--/#|--|###---------######|--P--P--/-#",
+    "#-#----#----------F#--/-#|---/---|--------------|---#--F------#--#",
+    "#-#----F----------F#--####--/-----|-------------|---F---|----/---#",
+    "#-F----#----------F#--------#------#######/-/####---######--/----#",
+    "#-#----F----------F#-P----P-#----------#------#-------------#----#",
+    "#-#----#----------FF--------#----------#--------#-----------#----#",
+    "#-F----F----------F#--------#----------###---#####--#########----#",
+    "#-F----#----------F#-P----P-##############---#---#--#------------#",
+    "#-|----/----------F#------------------------/--/|#--#------------#",
+    "#--|FF/-----------F##########---------------F-/-----#------------#",
+    "#-----------------F----------|--############F/-P--P-#------------#",
+    "#-----------------F-----------|---------------------#------------#",
+    "#-----------------F------------######F#####|--------#------------#",
+    "#-----------------F-------------------------|-P--P-/-------------#",
+    "#-----------------F--------------------------|----/--------------#",
+    "#-----------------F---------------------------|--/---------------#",
+    "#-----------------F----------------------------|/----------------#",
+    "#-----------------F----------------------------------------------#",
+    "##################################################################",
+  ],
 ];
 
-export let mapIndex = 0;
+export let mapIndex = 1;
 export let map = maps[mapIndex];
 export const mapStr = "#";
 
-//check if value is wall (for collision)
+// ── Geometry definitions ──────────────────────────────────────────────────────
+//
+// Map characters and what they do:
+//
+//  "#"  Full wall          — solid cube, full hitbox
+//  "D"  Door (x-axis)      — slides open on E; hitbox shrinks as it opens
+//  "Z"  Door (y-axis)      — same but y-axis
+//  "/"  Diagonal NW→SE     — player collides with the diagonal line itself
+//  "|"  Diagonal NE→SW     — same, opposite slope
+//  "T"  Thin wall          — narrow centered wall, thin hitbox strip
+//  "P"  Pillar             — round column, circular hitbox
+//
+export const GEOMETRY = {
+  "#":  { type: "full",     solid: true,  render: true  },
+  "F":  { type: "full",     solid: false, render: true  }, // false wall — visible but passable
+  "/":  { type: "diagonal", solid: true,  render: true,  slope:  1 },
+  "|": { type: "diagonal", solid: true,  render: true,  slope: -1 },
+  "P":  { type: "pillar",   solid: true,  render: true,  radius: 0.15 },
+};
+
+export function getGeometry(char) {
+  return GEOMETRY[char] ?? null;
+}
+/*
+// ── Door animation state ──────────────────────────────────────────────────────
+const doorStates = {};
+
+export function toggleDoor(mapX, mapY) {
+  const key = `${mapX},${mapY}`;
+  if (!doorStates[key]) doorStates[key] = { openAmount: 0, opening: false };
+  doorStates[key].opening = !doorStates[key].opening;
+}
+
+export function updateDoors(dt) {
+  for (const key in doorStates) {
+    const d = doorStates[key];
+    if (d.opening) d.openAmount = Math.min(1, d.openAmount + 1.5 * dt);
+    else           d.openAmount = Math.max(0, d.openAmount - 1.5 * dt);
+    const [mx, my] = key.split(",").map(Number);
+    const geo = GEOMETRY[map[my]?.[mx]];
+    if (geo?.type === "door") geo.openAmount = d.openAmount;
+  }
+}
+*/
+// ── Per-geometry collision ────────────────────────────────────────────────────
+// Tests whether the point (px, py) is inside the solid region of the geometry
+// at tile (tileX, tileY). Each type matches its visual shape exactly.
+
+function collidesWithGeometry(geo, px, py, tileX, tileY) {
+  // Local coords within the tile (0..1)
+  const lx = px - tileX;
+  const ly = py - tileY;
+
+  switch (geo.type) {
+
+    case "full":
+      // Only solid if the geo says so (false walls return false here)
+      return geo.solid;
+
+    case "diagonal": {
+      // slope = 1:  line from (0,1)→(1,0), equation: lx + ly = 1
+      //   solid on the side where lx + ly > 1
+      // slope = -1: line from (0,0)→(1,1), equation: lx - ly = 0
+      //   solid on the side where lx - ly < 0  (i.e. ly > lx)
+      const MARGIN = 0.085; // thickness of the collidable band around the line
+      if (geo.slope === 1) {
+        const dist = Math.abs(lx + ly - 1);
+        return dist < MARGIN;
+      } else {
+        const dist = Math.abs(lx - ly);
+        return dist < MARGIN;
+      }
+    }
+
+    case "pillar": {
+      // Circle centered at (0.5, 0.5)
+      const r  = geo.radius ?? 0.3;
+      const dx = lx - 0.5;
+      const dy = ly - 0.5;
+      return dx * dx + dy * dy < r * r;
+    }
+
+    default:
+      return false;
+  }
+}
+
+// ── isWall ────────────────────────────────────────────────────────────────────
+// Drop-in replacement for the original. Same call signature.
+// player.js calls this at 4 corners of the player bounding box — each corner
+// gets the precise geometry test for its tile, so hitboxes match visuals.
+
 export function isWall(x, y) {
-  return map[Math.floor(y)]?.[Math.floor(x)] === mapStr;
+  const tileX = Math.floor(x);
+  const tileY = Math.floor(y);
+  const char  = map[tileY]?.[tileX];
+  if (!char) return false;
+  const geo = getGeometry(char);
+  if (!geo) return false;
+  return collidesWithGeometry(geo, x, y, tileX, tileY);
 }
