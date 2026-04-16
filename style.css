@@ -99,7 +99,8 @@ canvas {
 }
  
 .menu li a:hover {
-  text-decoration: line-through;
+  color:lightslategray;
+  background-color: white;
 }
  
 .menu li a:hover::before {
