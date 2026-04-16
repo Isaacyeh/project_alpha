@@ -63,7 +63,7 @@ function clearInputState() {
 function isCustomizationOpen() {
   return !customizationOverlay.classList.contains("hidden");
 }
- 
+
 function isKeybindsOpen() {
   return !keybindsOverlay.classList.contains("hidden");
 }
@@ -267,8 +267,7 @@ confirmCustomization.addEventListener("click", () => {
  
   closeCustomizationOverlay();
 });
- 
-// ── Keybinds overlay ──────────────────────────────────────────────────────────
+//--- Keybinds overlay (custom controls) ─────────────────────────────────────────
 function openKeybindsOverlay() {
   keybindsOverlay.classList.remove("hidden");
   keybindsOverlay.setAttribute("aria-hidden", "false");
@@ -276,27 +275,27 @@ function openKeybindsOverlay() {
   clearInputState();
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
- 
+
 function closeKeybindsOverlay() {
   keybindsOverlay.classList.add("hidden");
   keybindsOverlay.setAttribute("aria-hidden", "true");
   syncMenuControlState();
   clearInputState();
 }
- 
+
 keybindsMenuLink.addEventListener("click", (e) => {
   e.preventDefault();
   e.stopPropagation();
   menu.classList.add("hidden");
   openKeybindsOverlay();
 });
- 
+
 keybindsOverlay.addEventListener("click", (e) => {
   if (e.target === keybindsOverlay) closeKeybindsOverlay();
 });
- 
+
 initKeybindMenu(closeKeybindsOverlay);
- 
+
 // ── Settings overlay (debug toggles) ─────────────────────────────────────────
 function openSettingsOverlay() {
   settingsOverlay.classList.remove("hidden");
@@ -342,6 +341,9 @@ const chatInput = document.getElementById("chatInput");
 const sendBtn   = document.getElementById("sendBtn");
  
 // ── WebSocket + game init (with retry) ───────────────────────────────────────
+
+
+
 const loader = window.__loader || {
   setProgress:  () => {},
   setRetryInfo: () => {},
