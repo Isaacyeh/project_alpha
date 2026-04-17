@@ -4,10 +4,31 @@ body {
   font-family: Arial, sans-serif;
 }
  
+#gameViewport {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+}
+
 canvas {
   border: 2px solid #444;
   display: block;
-  margin: 0 auto;
+}
+
+#game3d,
+#game {
+  margin: 0;
+}
+
+#game3d {
+  position: relative;
+  z-index: 1;
+}
+
+#game {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
 }
  
 /* ── Chat ─────────────────────────────────────────────────────────────────── */

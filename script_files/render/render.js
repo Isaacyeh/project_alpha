@@ -1,8 +1,8 @@
 import { FOV, JUMP_SCALE, MAX_HEALTH } from "../constant.js";
-import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
 import { getState, respawn } from "../player.js";
 import { getCrosshairOptions } from "../crosshair.js";
+import { renderWorld3D } from "./webglRenderer.js";
 
 // Cache for player sprite images
 const playerImages = new Map(); // id -> { img, url }
@@ -327,42 +327,12 @@ export function render(canvas, ctx) {
     staminaCooldown,
   } = getState();
 
-  const rays = canvas.width;
   const jumpOffset = z * JUMP_SCALE;
   const horizon = canvas.height / 2 + jumpOffset;
 
-  // Sky / floor
-  ctx.fillStyle = "#222";
-  ctx.fillRect(0, 0, canvas.width, horizon);
-  ctx.fillStyle = "#555";
-  ctx.fillRect(0, horizon, canvas.width, canvas.height - horizon);
-
-  // Walls
-  const depth = [];
-  let prevTileX = Math.floor(player.x);
-  let prevTileY = Math.floor(player.y);
-
-  for (let i = 0; i < rays; i++) {
-    const rayAngle = player.angle - FOV / 2 + (i / rays) * FOV;
-    const hit = castRay(rayAngle);
-    const dist = hit.dist * Math.cos(rayAngle - player.angle);
-    const height = canvas.height / Math.max(dist, 0.0001);
-    const drawH = height * (hit.heightScale ?? 1); // CHANGED
-    const yShift = height * (hit.yOffset ?? 0); // CHANGED
-    depth[i] = dist;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(i, horizon - drawH / 2 + yShift, 1, drawH); // CHANGED
-    const hitX = player.x + Math.cos(rayAngle) * hit.dist;
-    const hitY = player.y + Math.sin(rayAngle) * hit.dist;
-    const tileX = Math.floor(hitX);
-    const tileY = Math.floor(hitY);
-    if (tileX !== prevTileX || tileY !== prevTileY) {
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(i, horizon - drawH / 2 + yShift, 1, drawH); // CHANGED
-    }
-    prevTileX = tileX;
-    prevTileY = tileY;
-  }
+  // Clear HUD layer and render the 3D world on the WebGL canvas.
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  renderWorld3D(canvas, getState());
   // Collect all sprites (projectiles + remote players)
   const allProjectiles = [...projectiles];
   for (const id in others) {
@@ -396,8 +366,6 @@ export function render(canvas, ctx) {
       const norm = Math.atan2(Math.sin(angle), Math.cos(angle));
       if (Math.abs(norm) > FOV / 2) continue;
       const sx = (0.5 + norm / FOV) * canvas.width;
-      const di = Math.floor(sx);
-      if (di < 0 || di >= depth.length || depth[di] < dist) continue;
       const radius = Math.max(1, canvas.height / Math.max(dist * 20, 0.0001));
       const crosshairY = horizon + canvas.height * 0.04;
       const sy = crosshairY - ((proj.z || 0) - z) * JUMP_SCALE;
@@ -411,8 +379,6 @@ export function render(canvas, ctx) {
       const norm = Math.atan2(Math.sin(angle), Math.cos(angle));
       if (Math.abs(norm) > FOV / 2) continue;
       const sx = (0.5 + norm / FOV) * canvas.width;
-      const si = Math.floor(sx);
-      if (si < 0 || si >= depth.length || depth[si] < dist) continue;
 
       const size = canvas.height / Math.max(dist, 0.0001);
       const sy = horizon - size / 2 - (p.z || 0) * JUMP_SCALE;
