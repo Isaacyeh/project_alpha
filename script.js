@@ -264,7 +264,7 @@ confirmCustomization.addEventListener("click", () => {
   if (pendingSkinUrl) {
     setSprite(pendingSkinUrl);
   }
- 
+  localStorage.setItem("skinURL", pendingSkinUrl);
   closeCustomizationOverlay();
 });
  

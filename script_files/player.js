@@ -18,6 +18,10 @@ import { debugLog } from "./debug.js";
 import { keybinds, isPressed, initKeyMouseRef } from "./keybindControls.js";
  
 const SPAWN = { x: 17, y: 7, angle: 0, sneaking: false };
+
+const defaultSkin = "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png";
+let importedSprite = localStorage.getItem("skinURL");
+
 // Stamina constants
 const MAX_STAMINA = 1;
 const STAMINA_DRAIN = 0.005;
@@ -49,7 +53,7 @@ const state = {
   staminaCooldown: 0,
   isSprinting: false,
  
-  sprite: "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png",
+  sprite: (importedSprite) ? importedSprite : defaultSkin,
   username: "",
 };
  
