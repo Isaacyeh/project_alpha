@@ -1,3 +1,4 @@
+
 import { FOV, JUMP_SCALE, MAX_HEALTH, PROJECTILE_START_Z } from "../constant.js";
 import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
@@ -146,7 +147,7 @@ function drawBulletHoles(canvas, ctx, player, depth, horizon, fov) {
     // Fixed scene Y: horizon only. pitchPixels is NOT included here.
     // The ctx.translate handles shifting the whole scene with pitch.
     const sy = horizon + (hole.bulletOriginZ - hole.endZ) * wallH;
- 
+
     const radius = Math.max(1.5, wallH * 0.035);
     ctx.save();
     ctx.globalAlpha = alpha * 0.88;
@@ -274,7 +275,7 @@ export function render(canvas, ctx) {
   ctx.translate(0, -pitchPixels);
  
   // Sky
-  ctx.fillStyle = "#222";
+  ctx.fillStyle = "#333";
   ctx.fillRect(0, -extraPad, canvas.width, horizon + extraPad);
  
   // ── Walls + per-column floor fill ─────────────────────────────────────────

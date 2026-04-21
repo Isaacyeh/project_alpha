@@ -216,6 +216,43 @@ function pointHitsPlayer(px, py, pz) {
   }
   return false;
 }
+
+function getCrosshairGamePosition() {
+  const canvas = document.getElementById("game");
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: rect.width / 2,
+    y: rect.height / 2,
+  };
+}
+
+function getBulletHoleGamePosition(player, endpoint, bulletOriginZ) {
+  const canvas = document.getElementById("game");
+  if (!canvas) return null;
+
+  const rect = canvas.getBoundingClientRect();
+  const canvasW = rect.width;
+  const canvasH = rect.height;
+  const dx = endpoint.x - player.x;
+  const dy = endpoint.y - player.y;
+  const rawDist = Math.hypot(dx, dy);
+  if (rawDist < 0.0001) return null;
+
+  const angle = Math.atan2(dy, dx) - player.angle;
+  const norm = Math.atan2(Math.sin(angle), Math.cos(angle));
+  const sx = (0.5 + norm / FOV) * canvasW;
+
+  const perpDist = rawDist * Math.cos(norm);
+  if (perpDist < 0.0001) return null;
+
+  const wallH = canvasH / perpDist;
+  const horizon = canvasH / 2;
+  const pitchPixels = (state.pitch / (FOV / 2)) * (canvasH / 2);
+  const sy = horizon + (bulletOriginZ - endpoint.z) * wallH - pitchPixels;
+
+  return { x: sx, y: sy };
+}
  
 function canMove(x, y) {
   return (
@@ -367,16 +404,33 @@ export function update() {
       hitType:     endpoint.hitType,
     });
  
+    let bulletHolePlaced = false;
+
     // Only spawn a bullet hole if no player is at the endpoint
     if (endpoint.hitWall && endpoint.hitType !== "none") {
-      if (!pointHitsPlayer(endpoint.x, endpoint.y, endpoint.z)) {
+      const blockedByPlayer = pointHitsPlayer(endpoint.x, endpoint.y, endpoint.z);
+      if (!blockedByPlayer) {
         addBulletHole(endpoint.x, endpoint.y, endpoint.z, bulletOriginZ, endpoint.hitType);
+        bulletHolePlaced = true;
       }
     }
  
     debugLog("projectileFire",
       `FIRED id=${pid} range=${totalDist.toFixed(2)} frames=${travelFrames} ` +
       `pitch=${state.pitch.toFixed(3)} type=${endpoint.hitType}`);
+
+    const crosshair = getCrosshairGamePosition();
+    const bulletHole = bulletHolePlaced
+      ? getBulletHoleGamePosition(player, endpoint, bulletOriginZ)
+      : null;
+    const crosshairText = crosshair
+      ? `crosshairGamePx=(${crosshair.x.toFixed(1)},${crosshair.y.toFixed(1)})`
+      : "crosshair=unavailable";
+    const holeText = bulletHole
+      ? `bulletHoleGamePx=(${bulletHole.x.toFixed(1)},${bulletHole.y.toFixed(1)})`
+      : "bulletHoleGamePx=none";
+    debugLog("shotPlacement",
+      `SHOT id=${pid} ${crosshairText} ${holeText} surface=${endpoint.hitType}`);
  
     // FIRE_RATE_FRAMES from constant.js controls shots-per-second
     state.cooldown = FIRE_RATE_FRAMES;
