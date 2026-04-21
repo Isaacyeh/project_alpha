@@ -17,7 +17,17 @@ import { isWall, map, getGeometry } from "./map.js";
 import { debugLog } from "./debug.js";
 import { keybinds, isPressed, initKeyMouseRef } from "./keybindControls.js";
  
-const SPAWN = { x: 15, y: 9, angle: 0, sneaking: false };
+// spwan locations
+const SPAWNS = [
+  { x: 15, y: 9, angle: 0, sneaking: false },
+  { x: 5,  y: 5, angle: 0, sneaking: false },
+  { x: 20, y: 12, angle: Math.PI / 2, sneaking: false },
+  { x: 8,  y: 18, angle: Math.PI, sneaking: false },
+  { x: 25, y: 6, angle: -Math.PI / 2, sneaking: false }
+];
+
+const SPAWN = getRandomSpawn();
+
 // Stamina constants
 const MAX_STAMINA = 1;
 const STAMINA_DRAIN = 0.005;
@@ -26,7 +36,7 @@ const STAMINA_COOLDOWN_FRAMES = 180;
 const SPRINT_SPEED_MULT = 1.6;
  
 const state = {
-  player: { ...SPAWN },
+  player: { ...getRandomSpawn() },
   z: 0,
   zVel: 0,
   onGround: true,
@@ -59,6 +69,12 @@ let mouseRef = null;
 let nextProjectileId = 1;
 let COOLDOWN = 10;
  
+function getRandomSpawn() {
+  return SPAWNS[Math.floor(Math.random() * SPAWNS.length)];
+}
+
+
+
 export function initPlayer(keys, ws, mouse) {
   keysRef = keys;
   wsRef = ws;
@@ -138,10 +154,12 @@ export function respawn() {
   state.isRespawning = true;
   state.invincibilityTimer = SPAWN_INVINCIBILITY_DURATION;
  
-  state.player.x = SPAWN.x;
-  state.player.y = SPAWN.y;
-  state.player.angle = SPAWN.angle;
-  state.player.sneaking = SPAWN.sneaking;
+  const spawn = getRandomSpawn();
+
+  state.player.x = spawn.x;
+  state.player.y = spawn.y;
+  state.player.angle = spawn.angle;
+  state.player.sneaking = spawn.sneaking;
  
   state.z = 0;
   state.zVel = 0;
