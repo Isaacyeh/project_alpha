@@ -1,7 +1,7 @@
 let keysRef = null;
 let mouseRef = null;
 
-const importedKeybinds = JSON.parse(localStorage.getItem("keybinds"));
+const importedKeybinds = JSON.parse(localStorage.getItem("keybinds") || "{}");
 
 const defaults = {
   moveForward: "w",
@@ -15,6 +15,7 @@ const defaults = {
   turnLeft: "ArrowLeft",
   turnRight: "ArrowRight",
   sprint: "Shift",
+  leaderboard: "Tab",
 };
 
 
@@ -33,6 +34,7 @@ const labelMap = {
   turnLeft:       "Turn left",
   turnRight:      "Turn right",
   sprint:         "Sprint",
+  leaderboard:    "Show leaderboard",
 };
 
 export function isPressed(bind) {
