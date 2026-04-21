@@ -415,9 +415,10 @@ export function render(canvas, ctx) {
       // Vertical position: worldZ is the height in world coords (0=floor, 1=ceiling)
       // The wall column height on screen = canvas.height / bhPerpDist
       const wallH = canvas.height / Math.max(bhPerpDist, 0.0001);
-      // Map worldZ [0,1] to screen Y: center of wall = horizon, top = horizon - wallH/2
-      // worldZ=0.5 → horizon (eye level), worldZ=1 → top of wall, worldZ=0 → bottom
-      const sy = horizon - (bh.worldZ - 0.5) * wallH;
+      // Eye level in world Z = player.z + 0.5. Map worldZ to screen Y:
+      // eyeLevel → horizon, above eyeLevel → above horizon, below → below
+      const eyeLevel = z + 0.5;
+      const sy = horizon - (bh.worldZ - eyeLevel) * wallH;
 
       const holeRadius = Math.max(2, wallH * 0.04);
       ctx.save();

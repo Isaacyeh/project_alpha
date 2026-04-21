@@ -194,15 +194,32 @@ async function buildSkinSection() {
   skinUpload.addEventListener("change", (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target.result;
+    // Compress the image to a max dimension of 128px before encoding as base64,
+    // so the data URL stays well under the server's 200 KB limit.
+    const objectUrl = URL.createObjectURL(file);
+    const tmpImg = new Image();
+    tmpImg.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const MAX_DIM = 128;
+      const scale = Math.min(1, MAX_DIM / Math.max(tmpImg.width, tmpImg.height));
+      const w = Math.max(1, Math.round(tmpImg.width  * scale));
+      const h = Math.max(1, Math.round(tmpImg.height * scale));
+      const offscreen = document.createElement("canvas");
+      offscreen.width  = w;
+      offscreen.height = h;
+      const octx = offscreen.getContext("2d");
+      octx.drawImage(tmpImg, 0, 0, w, h);
+      const dataUrl = offscreen.toDataURL("image/jpeg", 0.85);
       pendingSkinUrl = dataUrl;
       presetSelect.value = "";
       updateSkinPreview(dataUrl);
       skinLabel.textContent = file.name;
     };
-    reader.readAsDataURL(file);
+    tmpImg.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      skinLabel.textContent = "Error loading image";
+    };
+    tmpImg.src = objectUrl;
   });
 }
  

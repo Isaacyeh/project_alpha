@@ -231,6 +231,25 @@ function rayCastHit(shooterId, originX, originY, originZ, angle, pitch) {
   return null;
 }
  
+// ── Server-side ray endpoint finder ──────────────────────────────────────────
+// Returns the world-space position where the ray hits a wall (or reaches max range).
+function rayEndpoint(originX, originY, originZ, angle, pitch) {
+  const cosPitch = Math.cos(pitch || 0);
+  const sinPitch = Math.sin(pitch || 0);
+  const dx = Math.cos(angle) * RAY_STEP * cosPitch;
+  const dy = Math.sin(angle) * RAY_STEP * cosPitch;
+  const dz = RAY_STEP * sinPitch;
+  const maxSteps = Math.ceil(TRACER_MAX_RANGE / RAY_STEP);
+  let x = originX, y = originY, z = originZ;
+  for (let i = 0; i < maxSteps; i++) {
+    x += dx; y += dy; z += dz;
+    if (isSolidAt(x, y)) {
+      return { x: x - dx * 0.5, y: y - dy * 0.5, z: z - dz * 0.5 };
+    }
+  }
+  return { x, y, z };
+}
+
 function debugLog_server(msg) {
   // Server-side console debug (off by default — uncomment if needed)
   // console.log("[server ray]", msg);
@@ -453,15 +472,31 @@ wss.on("connection", (ws) => {
       const originY = safeNum(data.y,     players[id].y,   0, 200);
       const originZ = safeNum(data.z,     players[id].z,   0, 10);
       const angle   = safeNum(data.angle, players[id].angle);
- 
+      const pitch   = safeNum(data.pitch, 0, -Math.PI, Math.PI);
+
       // Verify the origin is near the server's known position (anti-cheat)
       const posDrift = Math.hypot(originX - players[id].x, originY - players[id].y);
       if (posDrift > 2.0) {
         // Origin is too far from server-known position — reject
         return;
       }
- 
-      const victimId = rayCastHit(id, originX, originY, originZ, angle);
+
+      const victimId = rayCastHit(id, originX, originY, originZ, angle, pitch);
+
+      // Compute ray endpoint so other clients can simulate the tracer locally
+      const end = rayEndpoint(originX, originY, originZ, angle, pitch);
+      broadcastExcept(ws, {
+        type:  "bulletFired",
+        x:     originX,
+        y:     originY,
+        z:     originZ,
+        vx:    Math.cos(angle) * PROJECTILE_SPEED * Math.cos(pitch),
+        vy:    Math.sin(angle) * PROJECTILE_SPEED * Math.cos(pitch),
+        vz:    PROJECTILE_SPEED * Math.sin(pitch),
+        endX:  end.x,
+        endY:  end.y,
+        endZ:  end.z,
+      });
  
       if (victimId) {
         const victim    = players[victimId];
