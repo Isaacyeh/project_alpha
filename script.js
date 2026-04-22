@@ -10,7 +10,8 @@ import {
 } from "./script_files/player.js";
 import { SPAWN_INVINCIBILITY_DURATION, setFOV } from "./script_files/constant.js";
 import { setupChat } from "./script_files/chat.js";
-import { render, updateLeaderboard, addBulletHole } from "./script_files/render/render.js";
+import { render, updateLeaderboard } from "./script_files/render/render.js";
+import { addBulletHole } from "./script_files/bulletHole.js";
 import { loadSprites } from "./UI/spriteMenu.js";
 import { setCrosshairOptions } from "./script_files/crosshair.js";
 import { debugToggles } from "./script_files/debug.js";
