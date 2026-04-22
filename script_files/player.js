@@ -327,24 +327,27 @@ export function update() {
  
     // Visual bullet origin: eye/torso height
     const bulletOriginZ = state.z + PROJECTILE_START_Z;
+    const cosPitch = Math.cos(state.pitch);
+    const startOffset = 0.2;
+    const startX = player.x + Math.cos(player.angle) * startOffset * cosPitch;
+    const startY = player.y + Math.sin(player.angle) * startOffset * cosPitch;
  
     const endpoint = raycastShot(
       player.x, player.y, bulletOriginZ,
       player.angle, state.pitch
     );
  
-    const totalDist    = Math.hypot(endpoint.x - player.x, endpoint.y - player.y);
+    const totalDist    = Math.hypot(endpoint.x - startX, endpoint.y - startY);
     const travelFrames = Math.max(1, Math.round(totalDist / PROJECTILE_SPEED));
-    const cosPitch     = Math.cos(state.pitch);
     const pitchSlope   = state.pitch * PITCH_SCREEN_Y_SCALE;
  
     state.projectiles.push({
       id:          pid,
-      x:           player.x,
-      y:           player.y,
+      x:           startX,
+      y:           startY,
       z:           bulletOriginZ,
-      originX:     player.x,
-      originY:     player.y,
+      originX:     startX,
+      originY:     startY,
       originZ:     bulletOriginZ,
       angle:       player.angle,
       pitch:       state.pitch,
@@ -356,6 +359,7 @@ export function update() {
       vz:          -pitchSlope * PROJECTILE_SPEED * cosPitch,
       ttl:         travelFrames,
       totalFrames: travelFrames,
+      spawnFramesLeft: 1,
       hitWall:     endpoint.hitWall,
       hitType:     endpoint.hitType,
     });
@@ -393,7 +397,11 @@ export function update() {
  
   // ── Advance visual tracers ────────────────────────────────────────────────
   state.projectiles = state.projectiles.filter((p) => {
-    p.x += p.vx; p.y += p.vy; p.z += p.vz;
+    if (p.spawnFramesLeft > 0) {
+      p.spawnFramesLeft--;
+    } else {
+      p.x += p.vx; p.y += p.vy; p.z += p.vz;
+    }
     p.ttl--;
     const dFromOrigin = Math.hypot(p.x - p.originX, p.y - p.originY);
     const totalDist   = Math.hypot(p.endX - p.originX, p.endY - p.originY);

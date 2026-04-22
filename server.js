@@ -233,8 +233,8 @@ function rayCastShotResult(shooterId, originX, originY, originZ, angle, pitch) {
       // The ray hits if it passes through that vertical range.
       const victimZ    = victim.z || 0;
       const victimZTop = victimZ + 1.0;
-      const zInRange   = z >= victimZ - PROJECTILE_HIT_RADIUS_Z &&
-                         z <= victimZTop + PROJECTILE_HIT_RADIUS_Z;
+      const zInRange   = z >= victimZ &&
+                         z <= victimZTop;
  
       if (xyDist <= PROJECTILE_HIT_RADIUS && zInRange) {
         return { victimId, endpoint: null };

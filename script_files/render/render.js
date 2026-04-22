@@ -274,11 +274,7 @@ export function render(canvas, ctx) {
       const dx = proj.x-player.x, dy = proj.y-player.y;
       const rawDist = Math.hypot(dx, dy);
  
-      // For LOCAL player's bullets: skip the first 0.8 units so the bullet
-      // appears to come from the crosshair rather than snapping from feet.
-      // For OTHER players' bullets: show from distance 0 so they're always visible.
       const isLocal = projectiles.some(p => p.id === proj.id);
-      if (isLocal && rawDist < 0.8) continue;
  
       const angle = Math.atan2(dy,dx) - player.angle;
       const norm  = Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -287,9 +283,11 @@ export function render(canvas, ctx) {
       const sx       = (0.5 + norm/currentFOV)*canvas.width;
       const di       = Math.floor(sx);
       const perpDist = rawDist * Math.cos(norm);
-      if (di<0 || di>=depth.length || depth[di]<perpDist) continue;
+      if (di < 0 || di >= depth.length) continue;
+      if (!isLocal && depth[di] < perpDist) continue;
  
-      const radius = Math.max(1, canvas.height/Math.max(perpDist*20, 0.0001));
+      const radiusDist = Math.max(perpDist, 0.55);
+      const radius = Math.min(8, Math.max(1, canvas.height / Math.max(radiusDist * 20, 0.0001)));
  
       let bulletSy;
       if (isLocal) {
