@@ -27,6 +27,9 @@ const SPAWNS = [
 
 const SPAWN = getRandomSpawn();
 
+const defaultSkin = "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png";
+const importedSprite = localStorage.getItem("skinURL");
+
 // Stamina constants
 const MAX_STAMINA = 1;
 const STAMINA_DRAIN = 0.005;
@@ -58,7 +61,7 @@ const state = {
   staminaCooldown: 0,
   isSprinting: false,
  
-  sprite: "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png",
+  sprite: (importedSprite) ? importedSprite : defaultSkin,
   username: "",
 };
  
