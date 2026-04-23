@@ -18,6 +18,8 @@ import { loadSprites } from "./UI/spriteMenu.js";
 import { setCrosshairOptions } from "./script_files/crosshair.js";
 import { debugToggles } from "./script_files/debug.js";
 import { keybinds, initKeybindMenu } from "./script_files/keybindControls.js";
+
+window.__bootstrapStarted = true;
  
 const keys = {};
 const mouse = { x: 0, y: 0, dx: 0, dy: 0, buttons: {} };
@@ -63,6 +65,27 @@ const keybindsMenuLink      = document.getElementById("keybindsMenuLink");
 const settingsMenuLink      = document.getElementById("settingsMenuLink");
 const settingsOverlay       = document.getElementById("settingsOverlay");
 const closeSettings         = document.getElementById("closeSettings");
+
+function requireEl(id, el) {
+  if (!el) {
+    throw new Error(`Missing required DOM element: #${id}. Check deployed index.html/version mismatch.`);
+  }
+  return el;
+}
+
+requireEl("game", canvas);
+requireEl("menu", menu);
+requireEl("customizationMenuLink", customizationMenuLink);
+requireEl("customizationOverlay", customizationOverlay);
+requireEl("closeCustomization", closeCustomization);
+requireEl("crosshairImageInput", crosshairImageInput);
+requireEl("crosshairOpacityInput", crosshairOpacityInput);
+requireEl("confirmCustomization", confirmCustomization);
+requireEl("keybindsOverlay", keybindsOverlay);
+requireEl("keybindsMenuLink", keybindsMenuLink);
+requireEl("settingsMenuLink", settingsMenuLink);
+requireEl("settingsOverlay", settingsOverlay);
+requireEl("closeSettings", closeSettings);
  
 // ── Crosshair state ───────────────────────────────────────────────────────────
 let pendingCrosshairImage   = "";

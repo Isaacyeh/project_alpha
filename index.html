@@ -187,6 +187,41 @@
       </div>
     </div>
  
+    <script>
+      (function () {
+        // Show bootstrap failures directly on the loader so deployment issues
+        // (bad MIME, wrong rewrites, missing files) are visible to users.
+        function showLoaderError(message) {
+          const l = window.__loader;
+          if (!l || typeof l.showError !== "function") return;
+          if (typeof l.updateStep === "function") {
+            l.updateStep("bootstrap", "fail", message);
+          }
+          l.showError(message, function () { location.reload(); });
+        }
+
+        window.addEventListener("error", function (ev) {
+          const src = ev.filename ? `\nSource: ${ev.filename}:${ev.lineno || 0}:${ev.colno || 0}` : "";
+          const msg = ev && ev.message ? ev.message : "Unknown startup error";
+          showLoaderError(`Startup error: ${msg}${src}`);
+        });
+
+        window.addEventListener("unhandledrejection", function (ev) {
+          const reason = ev && ev.reason;
+          const msg = reason && reason.message ? reason.message : String(reason || "Unknown promise rejection");
+          showLoaderError(`Startup rejection: ${msg}`);
+        });
+
+        setTimeout(function () {
+          if (!window.__bootstrapStarted) {
+            showLoaderError(
+              "Game bootstrap did not start. This usually means script.js or one of its module imports failed to load (wrong path/MIME type/rewrite)."
+            );
+          }
+        }, 6000);
+      })();
+    </script>
+
     <script type="module" src="script.js"></script>
   </body>
 </html>

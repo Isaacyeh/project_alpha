@@ -30,6 +30,7 @@ const STAMINA_DRAIN = 0.005;
 const STAMINA_REGEN = 0.003;
 const STAMINA_COOLDOWN_FRAMES = 180;
 const SPRINT_SPEED_MULT = 1.6;
+const NETWORK_SEND_INTERVAL_MS = 33;
  
 const state = {
   player: { ...SPAWN },
@@ -58,13 +59,18 @@ const state = {
   pitch: 0,   // vertical camera angle (radians, + = look down, - = look up)
  
   sprite: "https://www.clker.com/cliparts/a/4/1/d/1301963432622081819stick_figure%20(1).png",
+  spriteAspect: 0.5,
   username: "",
+  networkRttMs: null,
+  networkJitterMs: null,
+  lastPongAt: 0,
 };
  
 let keysRef = null;
 let wsRef = null;
 let mouseRef = null;
 let nextProjectileId = 1;
+let lastNetworkSendAt = 0;
  
 export function initPlayer(keys, ws, mouse) {
   keysRef = keys;
@@ -105,6 +111,7 @@ export function setMyId(id) {
 }
  
 export function setOthers(nextOthers) {
+  const prevOthers = state.others;
   const filtered = { ...nextOthers };
   if (state.myId && filtered[state.myId] !== undefined) {
     const serverHealth = filtered[state.myId].health;
@@ -122,18 +129,52 @@ export function setOthers(nextOthers) {
     }
     delete filtered[state.myId];
   }
+
+  for (const id in filtered) {
+    const prev = prevOthers[id];
+    if (!prev) continue;
+    if (filtered[id].username == null) filtered[id].username = prev.username;
+    if (filtered[id].sprite == null) filtered[id].sprite = prev.sprite;
+    if (filtered[id].spriteAspect == null) filtered[id].spriteAspect = prev.spriteAspect;
+  }
+
   state.others = filtered;
 }
+
+export function updateRemoteMeta(id, meta) {
+  if (!id || !meta) return;
+  if (id === state.myId) return;
+  const current = state.others[id] || {};
+  state.others[id] = {
+    ...current,
+    username: meta.username ?? current.username,
+    sprite: meta.sprite ?? current.sprite,
+    spriteAspect: meta.spriteAspect ?? current.spriteAspect,
+  };
+}
  
-export function setSprite(url) {
+export function setSprite(url, spriteAspect = null) {
   state.sprite = url;
+  if (Number.isFinite(spriteAspect) && spriteAspect > 0) {
+    state.spriteAspect = spriteAspect;
+  }
   if (wsRef && wsRef.readyState === WebSocket.OPEN) {
-    wsRef.send(JSON.stringify({ type: "setSprite", sprite: url }));
+    wsRef.send(JSON.stringify({
+      type: "setSprite",
+      sprite: url,
+      spriteAspect: state.spriteAspect,
+    }));
   }
 }
  
 export function getState() {
   return state;
+}
+
+export function setNetworkLag(rttMs, jitterMs) {
+  state.networkRttMs = Number.isFinite(rttMs) ? rttMs : null;
+  state.networkJitterMs = Number.isFinite(jitterMs) ? jitterMs : null;
+  state.lastPongAt = Date.now();
 }
  
 export function respawn() {
@@ -410,7 +451,9 @@ export function update() {
   });
  
   // ── Network: send position + visual tracers ───────────────────────────────
-  if (wsRef.readyState === WebSocket.OPEN) {
+  const now = performance.now();
+  if (wsRef.readyState === WebSocket.OPEN && now - lastNetworkSendAt >= NETWORK_SEND_INTERVAL_MS) {
+    lastNetworkSendAt = now;
     wsRef.send(JSON.stringify({
       x:           player.x,
       y:           player.y,
