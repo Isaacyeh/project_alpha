@@ -5,7 +5,57 @@ import { drawMinimap } from "./minimap.js";
 import { getState, respawn } from "../player.js";
 import { getCrosshairOptions } from "../crosshair.js";
 import { drawBulletHolesIfEnabled } from "../bulletHole.js";
+import { debugToggles } from "../debug.js";
  
+// ── FPS Counter ───────────────────────────────────────────────────────────────
+// Maintains rolling average of last 60 frame times for accurate FPS calculation
+let lastFrameTime = performance.now();
+const frameTimeSamples = [];
+const maxSamples = 60;
+let currentFPS = 0;
+let currentFrameTimeMs = 0;
+let debugThrottleEnabled = false;
+
+function updateFPS() {
+  const now = performance.now();
+  const deltaTime = now - lastFrameTime;
+  lastFrameTime = now;
+  
+  // Add frame time to rolling array
+  frameTimeSamples.push(deltaTime);
+  if (frameTimeSamples.length > maxSamples) {
+    frameTimeSamples.shift();
+  }
+  
+  // Calculate average FPS and frame time from rolling window
+  const avgFrameTime = frameTimeSamples.reduce((a, b) => a + b, 0) / frameTimeSamples.length;
+  currentFPS = Math.round(1000 / avgFrameTime);
+  currentFrameTimeMs = avgFrameTime.toFixed(1);
+}
+
+// Debug throttle: artificially delay frame to test FPS counter
+function applyDebugThrottle() {
+  // Only throttle if FPS label toggle is enabled
+  if (!debugThrottleEnabled || !debugToggles.fpsLabel.enabled) return;
+  const targetFrameTime = 50; // 50ms = 20 FPS
+  const start = performance.now();
+  while (performance.now() - start < targetFrameTime) {
+    // Busy-wait to consume CPU time
+  }
+}
+
+// Toggle debug throttle with 'T' key (only when FPS label is enabled)
+window.addEventListener("keydown", (e) => {
+  if (e.key === "t" || e.key === "T") {
+    if (!debugToggles.fpsLabel.enabled) {
+      console.log("FPS counter must be enabled to use CPU throttle");
+      return;
+    }
+    debugThrottleEnabled = !debugThrottleEnabled;
+    console.log(`Debug throttle ${debugThrottleEnabled ? "ENABLED (20 FPS)" : "DISABLED"}`);
+  }
+});
+
 // ── Sprite image cache ────────────────────────────────────────────────────────
 const playerImages = new Map(); // id -> { img, url }
  
@@ -181,6 +231,7 @@ function setupRespawnButton(canvas) {
  
 // ── Main render ───────────────────────────────────────────────────────────────
 export function render(canvas, ctx) {
+  applyDebugThrottle();
   setupRespawnButton(canvas);
   const {
     player, z, pitch, others, myId, projectiles,
@@ -374,13 +425,39 @@ export function render(canvas, ctx) {
   drawStaminaBar(ctx,hudX,hpY-stH-gap,hudW,stH,stamina,staminaCooldown);
   drawCrosshair(canvas,ctx);
  
-  if (Math.abs(pitch)>0.04) {
+  // ── Update and draw pitch + FPS display ──────────────────────────────────────
+  updateFPS();
+  
+  let yOffset = 10;
+  
+  // Show FPS label only when toggle is enabled (FIRST)
+  if (debugToggles.fpsLabel.enabled) {
+    ctx.save(); ctx.font="12px monospace"; ctx.fillStyle="rgba(200,200,200,0.6)";
+    ctx.textAlign="right"; ctx.textBaseline="top";
+    ctx.fillText(`${currentFPS} FPS (${currentFrameTimeMs}ms)`,canvas.width-10,yOffset);
+    ctx.restore();
+    yOffset += 14;
+  }
+  
+  // Show throttle indicator if debug throttle is active (SECOND - only when FPS label enabled)
+  if (debugThrottleEnabled && debugToggles.fpsLabel.enabled) {
+    ctx.save(); ctx.font="bold 12px monospace"; ctx.fillStyle="#ff6666";
+    ctx.textAlign="right"; ctx.textBaseline="top";
+    ctx.fillText("[DEBUG THROTTLE ON - Press T to disable]",canvas.width-10,yOffset);
+    ctx.restore();
+    yOffset += 14;
+  }
+  
+  // Show pitch label only when toggle is enabled (THIRD)
+  const pitchShowing = debugToggles.pitchLabel.enabled && Math.abs(pitch)>0.04;
+  if (pitchShowing) {
     const deg=Math.round(pitch*(180/Math.PI));
     ctx.save(); ctx.font="12px monospace"; ctx.fillStyle="rgba(200,200,200,0.6)";
     ctx.textAlign="right"; ctx.textBaseline="top";
-    ctx.fillText(`${deg>0?"↓":"↑"}${Math.abs(deg)}°`,canvas.width-10,10);
+    ctx.fillText(`${deg>0?"↓":"↑"}${Math.abs(deg)}°`,canvas.width-10,yOffset);
     ctx.restore();
   }
+  
  
   if (tabHeld) drawLeaderboard(canvas,ctx);
  
