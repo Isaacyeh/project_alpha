@@ -445,6 +445,96 @@ canvas {
   color: lightslategray;
   border-color: lightslategray;
 }
+
+/* ── Gun menu ─────────────────────────────────────────────────────────────── */
+.gun-menu {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 10px;
+  margin: 4px 0 6px;
+}
+
+.gun-label {
+  font-size: 20px;
+  color: #ddd;
+}
+
+.gun-btn {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #ddd;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  padding: 8px;
+  text-align: center;
+  word-break: break-word;
+}
+
+.gun-btn:hover {
+  background: #383838;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.gun-btn.selected {
+  background: rgba(119, 136, 153, 0.2);
+  border-color: lightslategray;
+  color: lightslategray;
+}
+
+.gun-btn img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.reset-gun-button {
+  margin-top: 1.1rem;
+  width: 100%;
+  padding: 9px;
+  font-size: 14px;
+  color: #999;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reset-gun-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ccc;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.confirm-gun-button {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 9px;
+  font-size: 14px;
+  color: white;
+  font-weight: bold;
+  background-color: lightslategray;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.confirm-gun-button:hover {
+  background: white;
+  color: lightslategray;
+  border-color: lightslategray;
+}
  
 /* ── Settings toggle rows ─────────────────────────────────────────────────── */
 .toggle-row {

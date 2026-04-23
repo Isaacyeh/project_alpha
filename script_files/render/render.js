@@ -3,6 +3,7 @@ import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
 import { getState, respawn } from "../player.js";
 import { getCrosshairOptions } from "../crosshair.js";
+import { selectedGun } from "../guns.js";
 
 // Cache for player sprite images
 const playerImages = new Map(); // id -> { img, url }
@@ -398,10 +399,10 @@ export function render(canvas, ctx) {
       const sx = (0.5 + norm / FOV) * canvas.width;
       const di = Math.floor(sx);
       if (di < 0 || di >= depth.length || depth[di] < dist) continue;
-      const radius = Math.max(1, canvas.height / Math.max(dist * 20, 0.0001));
+      const radius = Math.max(1, canvas.height / Math.max(dist * 20, 0.0001)) * (selectedGun.current.projectileRadius / 0.0125);
       const crosshairY = horizon + canvas.height * 0.04;
       const sy = crosshairY - ((proj.z || 0) - z) * JUMP_SCALE;
-      drawSphere(ctx, sx, sy, radius);
+      drawSphere(ctx, sx, sy, radius, selectedGun.current.color);
     } else {
       const p = sprite.data;
       const dx = p.x - player.x;

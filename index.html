@@ -43,7 +43,7 @@
         <ul>
           <li><a href="#" id="customizationMenuLink">Customization</a></li>
           <li><a href="#" id="keybindsMenuLink">Keybinds</a></li>
-          <li><a href="#">TBD</a></li>
+          <li><a href="#" id="gunsMenuLink">Guns</a></li>
           <li><a href="#" id="settingsMenuLink">Settings</a></li>
         </ul>
       </div>
@@ -87,6 +87,18 @@
         <div class="kb-list" id="kbList"></div>
         <button class="kb-reset-btn" id="kbReset">Reset to defaults</button>
         <button class="kb-save-btn" id="kbSave">Save keybind to localStorage</button>
+      </div>
+    </div>
+
+    <!-- Guns overlay -->
+    <div id="gunsOverlay" class="overlay hidden" aria-hidden="true">
+      <div class="overlay-window">
+        <button id="closeGuns" type="button" class="overlay-close" aria-label="Close">✕</button>
+        <h2>Guns</h2>
+        <p class="overlay-subtitle">Choose a gun</p>
+        <div class="gun-menu" id="gunMenu"></div>
+        <button class="reset-gun-button" id="gunReset">Reset to defaults</button>
+        <button class="confirm-gun-button" id="gunSave">Save gun to localStorage</button>
       </div>
     </div>
  
