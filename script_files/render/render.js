@@ -1,4 +1,3 @@
-
 import { FOV, JUMP_SCALE, MAX_HEALTH, PITCH_SCREEN_Y_SCALE } from "../constant.js";
 import { castRay } from "./castRay.js";
 import { drawMinimap } from "./minimap.js";
@@ -342,10 +341,8 @@ export function render(canvas, ctx) {
       const radiusScale = Number.isFinite(proj.radiusScale) && proj.radiusScale > 0
         ? proj.radiusScale
         : 1;
-      const radius = Math.min(
-        8,
-        Math.max(1, canvas.height / Math.max(radiusDist * 20, 0.0001)) * radiusScale
-      );
+      const baseRadius = canvas.height / Math.max(radiusDist * 20, 0.0001);
+      const radius = Math.max(0.5, Math.min(18, baseRadius * radiusScale));
       const color = typeof proj.color === "string" ? proj.color : "#4db8ff";
  
       let bulletSy;

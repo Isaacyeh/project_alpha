@@ -10,15 +10,15 @@ export const JUMP_SCALE = 200;
 export const MINIMAP_SCALE = 10;
 export const MINIMAP_PADDING = 10;
 //projectile constants
-export const PROJECTILE_SPEED = 2;          // Visual tracer speed (world units/frame)
-export const PROJECTILE_LIFETIME = 60;      // Tracer lives 60 frames max
-export const PROJECTILE_START_Z = 0.5;      // Visual bullet origin height (eye level)
+export const PROJECTILE_SPEED = 0.15;       // Visual tracer speed (world units/frame)
+export const PROJECTILE_LIFETIME = 300;     // Tracer lives 300 frames max
+export const PROJECTILE_START_Z = 0.15;     // Visual bullet origin height (eye level)
 export const PROJECTILE_RADIUS = 0.0125;    // Visual only
 export const TRACER_MAX_RANGE = 18;         // Max raycast range in world units
 export const FIRE_RATE_FRAMES = 6;          // Frames between shots (lower = faster fire rate)
                                             // At 60fps: 6 = 10 shots/sec, 3 = 20/sec, 1 = 60/sec
 //health constants
-export const MAX_HEALTH = 1;
+export const MAX_HEALTH = 100;
 export const HIT_DAMAGE = 0.1;
 //invincibility constants
 export const SPAWN_INVINCIBILITY_DURATION = 300; // 5 seconds at 60fps
@@ -37,4 +37,3 @@ export const PITCH_SCREEN_Y_SCALE = 0.75;
 export function setFOV(radians) {
   FOV = radians;
 }
- 

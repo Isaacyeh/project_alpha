@@ -25,12 +25,12 @@ const PROJECTILE_RADIUS     = 0.025;
 const PROJECTILE_HIT_RADIUS = PLAYER_RADIUS + PROJECTILE_RADIUS; // 0.225
 const PROJECTILE_HIT_RADIUS_Z = PLAYER_RADIUS + PROJECTILE_RADIUS;
 const DEFAULT_SPRITE_ASPECT = 0.5;
-const MAX_HEALTH            = 1;
+const MAX_HEALTH            = 100;
 const MAX_PROJECTILES_PER_PLAYER = 20;
 const TRACER_MAX_RANGE      = 18;
 const RAY_STEP              = 0.05;
 const PITCH_SCREEN_Y_SCALE  = 0.75;
-const PROJECTILE_START_Z    = 0.5;
+const PROJECTILE_START_Z    = 0.15;
 const SPAWN_INVINCIBILITY_MS = 5_000;
 const MAX_REMOTE_SPRITE_URL_LENGTH = 4096;
 const MAX_INLINE_SPRITE_DATA_URL_LENGTH = 350_000;
@@ -201,12 +201,12 @@ function isSolidAt(x, y) {
 // Returns the first collision along the shot path:
 // - victimId when a player is hit
 // - endpoint when world geometry (wall/floor/ceiling) is hit
-function rayCastShotResult(shooterId, originX, originY, originZ, angle, pitch) {
+function rayCastShotResult(shooterId, originX, originY, originZ, angle, pitch, maxRange = TRACER_MAX_RANGE) {
   const cosPitch = Math.cos(pitch || 0);
   const dx   = Math.cos(angle) * RAY_STEP * cosPitch;
   const dy   = Math.sin(angle) * RAY_STEP * cosPitch;
   const dz   = -(pitch || 0) * PITCH_SCREEN_Y_SCALE * RAY_STEP * cosPitch;
-  const maxSteps = Math.ceil(TRACER_MAX_RANGE / RAY_STEP);
+  const maxSteps = Math.ceil(maxRange / RAY_STEP);
  
   let x = originX;
   let y = originY;
@@ -545,7 +545,7 @@ wss.on("connection", (ws) => {
       if (posDrift > 2.0) return;
  
       // Pass pitch so the server ray tracks z correctly (no false hits above/below)
-      const shotResult = rayCastShotResult(id, originX, originY, shotOriginZ, angle, pitch);
+      const shotResult = rayCastShotResult(id, originX, originY, shotOriginZ, angle, pitch, gun.range);
       const victimId = shotResult.victimId;
  
       if (victimId) {

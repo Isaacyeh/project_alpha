@@ -369,7 +369,7 @@ export function update() {
     // Visual bullet origin: eye/torso height
     const bulletOriginZ = state.z + PROJECTILE_START_Z;
     const cosPitch = Math.cos(state.pitch);
-    const startOffset = 0.2;
+    const startOffset = 0;
     const startX = player.x + Math.cos(player.angle) * startOffset * cosPitch;
     const startY = player.y + Math.sin(player.angle) * startOffset * cosPitch;
  
@@ -471,6 +471,8 @@ export function update() {
         vy:  p.vy,
         vz:  p.vz,
         ttl: p.ttl,
+        color: p.color,
+        radiusScale: p.radiusScale,
       })),
       health:    state.health,
       sneaking:  state.player.sneaking,
