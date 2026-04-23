@@ -7,6 +7,8 @@ import {
   setMenuOpen,
   setSprite,
   promptUsername,
+  setNetworkLag,
+  updateRemoteMeta,
 } from "./script_files/player.js";
 import { SPAWN_INVINCIBILITY_DURATION, setFOV } from "./script_files/constant.js";
 import { setupChat } from "./script_files/chat.js";
@@ -143,6 +145,27 @@ function updateSkinPreview(url) {
   if (url) { preview.src = url; preview.style.display = "block"; }
   else      { preview.style.display = "none"; }
 }
+
+function normalizeScaleX(width, height) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || height <= 0) return null;
+  return width / height;
+}
+
+function formatScaleX(scaleX) {
+  if (!Number.isFinite(scaleX) || scaleX <= 0) return "-";
+  const fixed = scaleX >= 10 ? scaleX.toFixed(1) : scaleX.toFixed(2);
+  return fixed.replace(/\.0+$|(?<=\.[0-9]*[1-9])0+$/, "");
+}
+
+function readImageDimensions(url) {
+  return new Promise((resolve) => {
+    if (!url) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
  
 // ── FOV slider ────────────────────────────────────────────────────────────────
 let fovSliderBuilt = false;
@@ -203,6 +226,7 @@ async function buildSkinSection() {
     <div class="field-group" style="margin-top:10px;">
       <label for="skinUploadInput">Or upload a custom image</label>
       <input id="skinUploadInput" type="file" accept="image/*" />
+      <div id="skinScaleLabel" style="margin-top:6px; color:#aaa; font-size:12px;">Image scale: -</div>
     </div>
     <div style="margin-top:10px; display:flex; align-items:center; gap:12px;">
       <img id="skinPreviewImg" src="" alt="Skin preview" style="
@@ -216,6 +240,29 @@ async function buildSkinSection() {
   const presetSelect = document.getElementById("skinPresetSelect");
   const skinUpload   = document.getElementById("skinUploadInput");
   const skinLabel    = document.getElementById("skinPreviewLabel");
+  const skinScale    = document.getElementById("skinScaleLabel");
+
+  let scaleRequestId = 0;
+  async function updateSkinScale(url) {
+    if (!skinScale) return;
+    if (!url) {
+      skinScale.textContent = "Image scale: -";
+      return;
+    }
+    const requestId = ++scaleRequestId;
+    const dims = await readImageDimensions(url);
+    if (requestId !== scaleRequestId) return;
+    if (!dims) {
+      skinScale.textContent = "Image scale: -";
+      return;
+    }
+    const scaleX = normalizeScaleX(dims.width, dims.height);
+    if (scaleX === null) {
+      skinScale.textContent = "Image scale: -";
+      return;
+    }
+    skinScale.textContent = `Image scale: ${formatScaleX(scaleX)}:1 (${dims.width}x${dims.height})`;
+  }
  
   const currentSprite = getState().sprite;
   const match = spritesData.find((s) => s.url === currentSprite);
@@ -224,6 +271,9 @@ async function buildSkinSection() {
     pendingSkinUrl = match.url;
     updateSkinPreview(match.url);
     skinLabel.textContent = match.name;
+    updateSkinScale(match.url);
+  } else {
+    updateSkinScale(currentSprite || "");
   }
  
   presetSelect.addEventListener("change", (e) => {
@@ -233,6 +283,7 @@ async function buildSkinSection() {
     skinUpload.value = "";
     pendingSkinUrl = url;
     updateSkinPreview(url);
+    updateSkinScale(url);
     const selected = spritesData.find((s) => s.url === url);
     skinLabel.textContent = selected ? selected.name : "Preset skin";
   });
@@ -256,6 +307,7 @@ async function buildSkinSection() {
       pendingSkinUrl = dataUrl;
       presetSelect.value = "";
       updateSkinPreview(dataUrl);
+      updateSkinScale(dataUrl);
       skinLabel.textContent = file.name;
     };
     reader.readAsDataURL(file);
@@ -392,6 +444,8 @@ const WS_OPEN_TIMEOUT  = 8000;
  
 let gameStarted = false;
 let retryCount  = 0;
+let pingTimer = null;
+let lastRttMs = null;
  
 function connectWebSocket() {
   if (retryCount === 0) {
@@ -455,10 +509,34 @@ function connectWebSocket() {
           loader.addStep("render", "Starting render loop...", "wait");
         }
       }
+      if (data.type === "playerMeta") {
+        updateRemoteMeta(data.id, data.meta);
+      }
+      if (data.type === "playerMetaSnapshot" && data.players && typeof data.players === "object") {
+        for (const id in data.players) {
+          updateRemoteMeta(id, data.players[id]);
+        }
+      }
       if (data.type === "bulletHole") {
         addBulletHole(data.wx, data.wy, data.endZ, data.bulletOriginZ, data.hitType);
       }
+      if (data.type === "pong") {
+        const now = performance.now();
+        const sentAt = Number(data.clientTs);
+        if (Number.isFinite(sentAt)) {
+          const rtt = Math.max(0, now - sentAt);
+          const jitter = lastRttMs == null ? 0 : Math.abs(rtt - lastRttMs);
+          lastRttMs = rtt;
+          setNetworkLag(rtt, jitter);
+        }
+      }
     });
+
+    if (pingTimer) clearInterval(pingTimer);
+    pingTimer = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: "ping", clientTs: performance.now() }));
+    }, 2000);
  
     let loopStarted = false;
     function loop() {
@@ -499,6 +577,12 @@ function connectWebSocket() {
  
   ws.addEventListener("close", (e) => {
     clearTimeout(openTimer);
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+    lastRttMs = null;
+    setNetworkLag(null, null);
     if (gameStarted) return;
     const reason = e.reason ? ` (${e.reason})` : (e.code ? ` [code ${e.code}]` : "");
     if (retryCount >= WS_MAX_RETRIES) {

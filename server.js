@@ -24,6 +24,7 @@ const PLAYER_RADIUS         = 0.2;
 const PROJECTILE_RADIUS     = 0.025;
 const PROJECTILE_HIT_RADIUS = PLAYER_RADIUS + PROJECTILE_RADIUS; // 0.225
 const PROJECTILE_HIT_RADIUS_Z = PLAYER_RADIUS + PROJECTILE_RADIUS;
+const DEFAULT_SPRITE_ASPECT = 0.5;
 const MAX_HEALTH            = 1;
 const MAX_PROJECTILES_PER_PLAYER = 20;
 const TRACER_MAX_RANGE      = 18;
@@ -31,8 +32,20 @@ const RAY_STEP              = 0.05;
 const PITCH_SCREEN_Y_SCALE  = 0.75;
 const PROJECTILE_START_Z    = 0.5;
 const SPAWN_INVINCIBILITY_MS = 5_000;
+const MAX_REMOTE_SPRITE_URL_LENGTH = 4096;
+const MAX_INLINE_SPRITE_DATA_URL_LENGTH = 350_000;
+const MAX_CHAT_IMAGE_DATA_URL_LENGTH = 350_000;
+const BROADCAST_HZ = safeNum(Number(process.env.BROADCAST_HZ), 30, 10, 120);
  
 const SPAWN = { x: 3, y: 17, angle: 0 };
+
+function getPlayerHitBoxXY(victim) {
+  const aspect = safeNum(victim?.spriteAspect, DEFAULT_SPRITE_ASPECT, 0.05, 8);
+  return {
+    halfWidth: PLAYER_RADIUS * aspect,
+    halfHeight: PLAYER_RADIUS,
+  };
+}
  
 // ── Map import (Node-compatible version of map.js) ────────────────────────────
 // We duplicate only what the server needs: the map array and isWall logic.
@@ -227,7 +240,7 @@ function rayCastShotResult(shooterId, originX, originY, originZ, angle, pitch) {
       if (victim.health <= 0) continue;
       if (Date.now() < (victim.invincibleUntil || 0)) continue;
  
-      const xyDist = Math.hypot(x - victim.x, y - victim.y);
+      const hitBoxXY = getPlayerHitBoxXY(victim);
       // Use the ray's current z (pitch-adjusted) vs victim's z (floor position).
       // Victim occupies z range [victim.z, victim.z + 1] (one world unit tall).
       // The ray hits if it passes through that vertical range.
@@ -236,7 +249,10 @@ function rayCastShotResult(shooterId, originX, originY, originZ, angle, pitch) {
       const zInRange   = z >= victimZ &&
                          z <= victimZTop;
  
-      if (xyDist <= PROJECTILE_HIT_RADIUS && zInRange) {
+      const xInRange = Math.abs(x - victim.x) <= hitBoxXY.halfWidth;
+      const yInRange = Math.abs(y - victim.y) <= hitBoxXY.halfHeight;
+
+      if (xInRange && yInRange && zInRange) {
         return { victimId, endpoint: null };
       }
     }
@@ -255,13 +271,13 @@ const playerStats = {};
  
 let broadcastDirty = false;
  
-// Broadcast loop — 20 Hz
+// Broadcast loop — configurable (default 30 Hz)
 setInterval(() => {
   if (broadcastDirty) {
     broadcastDirty = false;
     _doBroadcastPlayers();
   }
-}, 1000 / 20);
+}, 1000 / BROADCAST_HZ);
  
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function isFiniteNum(v) {
@@ -296,7 +312,6 @@ function _doBroadcastPlayers() {
       username:    p.username,
       projectiles: p.projectiles || [],
       health:      p.health,
-      sprite:      p.sprite,
       sneaking:    p.sneaking,
       isDead:      p.health <= 0,
       isInvincible: Date.now() < (p.invincibleUntil || 0),
@@ -333,6 +348,33 @@ function broadcastAll(obj) {
  
 function broadcastChat(name, message) { broadcastAll({ type: "chat", name, message }); }
 function broadcastChatImage(name, imageData) { broadcastAll({ type: "chatImage", name, imageData }); }
+
+function buildPlayerMetaMap() {
+  const meta = {};
+  for (const id in players) {
+    const p = players[id];
+    meta[id] = {
+      username: p.username,
+      sprite: p.sprite,
+      spriteAspect: p.spriteAspect,
+    };
+  }
+  return meta;
+}
+
+function broadcastPlayerMeta(id) {
+  const p = players[id];
+  if (!p) return;
+  broadcastAll({
+    type: "playerMeta",
+    id,
+    meta: {
+      username: p.username,
+      sprite: p.sprite,
+      spriteAspect: p.spriteAspect,
+    },
+  });
+}
  
 // Keepalive
 setInterval(() => {
@@ -358,6 +400,7 @@ wss.on("connection", (ws) => {
     projectiles:    [],
     health:         MAX_HEALTH,
     sprite:         "/images/sprite1.png",
+    spriteAspect:   0.5,
     invincibleUntil: Date.now() + SPAWN_INVINCIBILITY_MS,
     inMenu:         false,
     sneaking:       false,
@@ -368,12 +411,20 @@ wss.on("connection", (ws) => {
   }
  
   ws.send(JSON.stringify({ type: "init", id }));
+  ws.send(JSON.stringify({ type: "playerMetaSnapshot", players: buildPlayerMetaMap() }));
+  broadcastPlayerMeta(id);
  
   ws.on("pong", () => { ws.isAlive = true; });
  
   ws.on("message", (msg) => {
     let data;
     try { data = JSON.parse(msg); } catch { return; }
+
+    // ── App-level ping/pong (for browser RTT measurement) ─────────────────
+    if (data.type === "ping") {
+      ws.send(JSON.stringify({ type: "pong", clientTs: data.clientTs, serverTs: Date.now() }));
+      return;
+    }
  
     // ── Chat ────────────────────────────────────────────────────────────────
     if (data.type === "chat") {
@@ -384,7 +435,7 @@ wss.on("connection", (ws) => {
  
     if (data.type === "chatImage") {
       const imageData = String(data.imageData || "");
-      if (imageData.startsWith("data:image/") && imageData.length < 2_000_000) {
+      if (imageData.startsWith("data:image/") && imageData.length < MAX_CHAT_IMAGE_DATA_URL_LENGTH) {
         broadcastChatImage(players[id].username, imageData);
       }
       return;
@@ -393,11 +444,20 @@ wss.on("connection", (ws) => {
     // ── Meta ────────────────────────────────────────────────────────────────
     if (data.type === "setName") {
       players[id].username = String(data.name || "Anonymous").trim().slice(0, 32) || "Anonymous";
+      broadcastPlayerMeta(id);
+      markDirty();
       return;
     }
  
     if (data.type === "setSprite") {
-      players[id].sprite = String(data.sprite || "").slice(0, 2_000_000); // allow base64
+      const sprite = String(data.sprite || "");
+      if (sprite.startsWith("data:image/")) {
+        players[id].sprite = sprite.slice(0, MAX_INLINE_SPRITE_DATA_URL_LENGTH);
+      } else {
+        players[id].sprite = sprite.slice(0, MAX_REMOTE_SPRITE_URL_LENGTH);
+      }
+      players[id].spriteAspect = safeNum(data.spriteAspect, players[id].spriteAspect, 0.05, 8);
+      broadcastPlayerMeta(id);
       markDirty();
       return;
     }
@@ -529,5 +589,5 @@ wss.on("connection", (ws) => {
 });
  
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} (broadcast ${BROADCAST_HZ} Hz)`);
 });

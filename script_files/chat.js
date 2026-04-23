@@ -37,9 +37,9 @@ export function setupChat(ws, chatInput, chat, sendBtn, username) {
   }
  
   ws.addEventListener("open", () => {
-    const { sprite } = getState();
+    const { sprite, spriteAspect } = getState();
     ws.send(JSON.stringify({ type: "setName", name: username }));
-    ws.send(JSON.stringify({ type: "setSprite", sprite }));
+    ws.send(JSON.stringify({ type: "setSprite", sprite, spriteAspect }));
   });
  
   sendBtn.addEventListener("click", sendMessage);

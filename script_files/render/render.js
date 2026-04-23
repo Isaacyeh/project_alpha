@@ -236,6 +236,7 @@ export function render(canvas, ctx) {
   const {
     player, z, pitch, others, myId, projectiles,
     health, isDead, deathTimer, canRespawn, stamina, staminaCooldown,
+    networkRttMs, networkJitterMs, lastPongAt,
   } = getState();
  
   const rays       = canvas.width;
@@ -362,17 +363,9 @@ export function render(canvas, ctx) {
       const rawDist = Math.hypot(dx,dy);
       const angle = Math.atan2(dy,dx)-player.angle;
       const norm  = Math.atan2(Math.sin(angle),Math.cos(angle));
-      if (Math.abs(norm)>currentFOV/2) continue;
  
       const sx       = (0.5+norm/currentFOV)*canvas.width;
-      const si       = Math.floor(sx);
       const perpDist = rawDist*Math.cos(norm);
-      if (si<0||si>=depth.length||depth[si]<perpDist) continue;
- 
-      const size  = canvas.height/Math.max(perpDist,0.0001);
-      const wallH = canvas.height/Math.max(perpDist,0.0001);
-      const eyeZ  = 0.5, spriteZ = (p.z||0)+0.5;
-      const sy    = horizon + (eyeZ-spriteZ)*wallH - size/2;
  
       const playerImg = getPlayerImage(sprite.id, p.sprite);
       const imgReady  = playerImg&&playerImg.complete&&!playerImg.__error&&playerImg.naturalWidth>0;
@@ -380,11 +373,27 @@ export function render(canvas, ctx) {
         ? (compressedSprites.has(p.sprite) ? 0.5 : playerImg.naturalWidth/playerImg.naturalHeight)
         : DEFAULT_ASPECT;
  
+      const viewDist  = Math.max(rawDist,0.0001);
+      const size      = canvas.height/viewDist;
+      const wallH     = canvas.height/viewDist;
+      const eyeZ      = 0.5, spriteZ = (p.z||0)+0.5;
+      const sy        = horizon + (eyeZ-spriteZ)*wallH - size/2;
       const renderedW = size*imgAspect, renderedH = size;
       const hitboxW   = Math.max(size*DEFAULT_ASPECT, renderedW);
       const hitboxH   = Math.max(size, renderedH);
       const hitboxX   = sx-hitboxW/2;
       const hitboxY   = sy+(size-hitboxH)/2;
+
+      const imageX    = sx-renderedW/2;
+      const leftEdge  = imageX;
+      const rightEdge = imageX + renderedW;
+      if (rightEdge < 0 || leftEdge > canvas.width) continue;
+
+      const visibleLeft  = Math.max(0, Math.floor(leftEdge));
+      const visibleRight = Math.min(canvas.width - 1, Math.ceil(rightEdge - 1));
+      const sampleX      = Math.min(visibleRight, Math.max(visibleLeft, Math.floor(sx)));
+      const si           = Math.max(0, Math.min(depth.length - 1, sampleX));
+      if (depth[si] < perpDist) continue;
  
       if (imgReady) {
         ctx.drawImage(playerImg, sx-renderedW/2, sy, renderedW, renderedH);
@@ -455,6 +464,28 @@ export function render(canvas, ctx) {
     ctx.save(); ctx.font="12px monospace"; ctx.fillStyle="rgba(200,200,200,0.6)";
     ctx.textAlign="right"; ctx.textBaseline="top";
     ctx.fillText(`${deg>0?"↓":"↑"}${Math.abs(deg)}°`,canvas.width-10,yOffset);
+    ctx.restore();
+    yOffset += 14;
+  }
+
+  if (debugToggles.networkLagLabel.enabled) {
+    let label = "NET --";
+    let color = "rgba(200,200,200,0.6)";
+    const stale = !lastPongAt || (Date.now() - lastPongAt) > 5000;
+    if (stale) {
+      label = "NET timeout";
+      color = "#ff6666";
+    } else if (Number.isFinite(networkRttMs)) {
+      const rtt = Math.round(networkRttMs);
+      const jitter = Number.isFinite(networkJitterMs) ? Math.round(networkJitterMs) : 0;
+      label = `NET ${rtt}ms (j${jitter})`;
+      if (rtt <= 60) color = "#7bd88f";
+      else if (rtt <= 120) color = "#f3d47a";
+      else color = "#ff6666";
+    }
+    ctx.save(); ctx.font="12px monospace"; ctx.fillStyle=color;
+    ctx.textAlign="right"; ctx.textBaseline="top";
+    ctx.fillText(label,canvas.width-10,yOffset);
     ctx.restore();
   }
   
